@@ -257,12 +257,27 @@ def goto_page(doc, current, target, opts):
     refresh_screen(doc, target, opts)
     return target
 
+# Works in progress
+
 def search_page(doc, current, search):
     results = doc.searchPageFor(current, search)
     clear_screen()
     print(results)
     raise SystemExit
 
+def show_toc(doc,n):
+    clear_screen()
+    clear_page(n)
+    toc = doc.getToC()
+    toc_text = ''
+    for sec in toc:
+        toc_text += '{}{}'.format(" " * sec[0], sec[1]) 
+    print(toc_text)
+    raise SystemExit
+
+
+
+# Main Viewer
 def viewer(doc):
     stdscr = curses.initscr()
     clear_screen()
@@ -363,8 +378,9 @@ def viewer(doc):
                 refresh_screen(doc, n, opts)
             elif char in DEBUG:
                 # a spot for messing around with ideas
+                # search_page(doc, n, "the")
+                show_toc(doc,n)
                 # pass
-                search_page(doc, n, "the")
 
 
             prev = char  
