@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+# vim:fileencoding=utf-8
+
+import array
+import curses
+import fcntl
+import fitz
+import os
+import re
+import readchar
+import signal
+import subprocess
+import sys
+import termios
+import tty
+import zlib
+from base64 import standard_b64encode
+from collections import namedtuple
+from io import TextIOWrapper, BytesIO
+from math import ceil
+from time import sleep
+
+
+
+def screen_size_function(fd=None):
+    # ans = getattr(screen_size_function, 'ans', None)
+    # if ans is None:
+    Size = namedtuple('Size', 'rows cols width height cell_width cell_height')
+    if fd is None:
+        fd = sys.stdout
+
+    def screen_size():
+        if screen_size.changed:
+            buf = array.array('H', [0, 0, 0, 0])
+            fcntl.ioctl(fd, termios.TIOCGWINSZ, buf)
+            rows, cols, width, height = tuple(buf)
+            cell_width, cell_height = width // (cols or 1), height // (rows or 1)
+            screen_size.ans = Size(rows, cols, width, height, cell_width, cell_height)
+            screen_size.changed = False
+        return screen_size.ans
+    screen_size.changed = True
+    screen_size.Size = Size
+    ans = screen_size_function.ans = screen_size
+
+    return ans
+
+def calculate_in_cell_x_offset(width, cell_width, align):
+    if align == 'left':
+        return 0
+    extra_pixels = width % cell_width
+    if not extra_pixels:
+        return 0
+    if align == 'right':
+        return cell_width - extra_pixels
+    return (cell_width - extra_pixels) // 2
+
+def serialize_gr_command(cmd, payload=None):
+   cmd = ','.join('{}={}'.format(k, v) for k, v in cmd.items())
+   ans = []
+   w = ans.append
+   w(b'\033_G'), w(cmd.encode('ascii'))
+   if payload:
+      w(b';')
+      w(payload)
+   w(b'\033\\')
+   return b''.join(ans)
+
+def write_gr_cmd(cmd, payload=None):
+    sys.stdout.buffer.write(serialize_gr_command(cmd, payload))
+    sys.stdout.flush()
+
+def write_gr_cmd_with_response(cmd, payload=None):
+    write_gr_cmd(cmd, payload)
+    resp = b''
+    while resp[-2:] != b'\033\\':
+        resp += sys.stdin.buffer.read(1)
+    if b'OK' in resp:
+        return True
+    else:
+        return False
+
+def write_chunked(cmd, data):
+    if cmd['f'] != 100:
+        data = zlib.compress(data)
+        cmd['o'] = 'z'
+    data = standard_b64encode(data)
+    while data:
+        chunk, data = data[:4096], data[4096:]
+        m = 1 if data else 0
+        cmd['m'] = m
+        write_gr_cmd(cmd, chunk)
+        cmd.clear()
+
+def set_cursor(x_place, y_place):
+    sys.stdout.buffer.write('\033[{};{}f'.format(y_place, x_place).encode('ascii'))
+
+def hide_cursor():
+    sys.stdout.buffer.write('\033[?25l'.encode('ascii'))
+
+def show_cursor():
+    sys.stdout.buffer.write('\033[?25h'.encode('ascii'))
+
+def set_image_cursor(display_width, display_height, ss_width, ss_height):
+    x_place_pixels = (ss_width / 2) - (display_width / 2)
+    x_place = int(ceil(x_place_pixels / screen_size().cell_width) - 1)
+    y_place = 1
+    set_cursor(x_place, y_place)
+
+def clear_screen():
+    subprocess.run('clear')
+    cmd = {'a': 'd', 'd': 'Z', 'z': 0} 
+    write_gr_cmd(cmd)
+
+def clear_page(n):
+    cmd = {'a': 'd', 'i': n + 1}
+    write_gr_cmd(cmd)
+
+def display_page(doc, n):
+    page = doc.loadPage(n)
+    page_width = page.bound().width
+    page_height = page.bound().height
+    screen_size = screen_size_function()
+    ss_width = screen_size().width
+    ss_height = screen_size().height
+    x_factor = ss_width / page_width
+    y_factor = (ss_height - screen_size().cell_height) / page_height
+    factor = min(x_factor, y_factor)
+    display_width = factor * page_width
+    display_height = factor * page_height
+    set_image_cursor(display_width, display_height, ss_width, ss_height)
+    cmd = {'a': 'p', 'i': n + 1, 'z': 0}
+    if not write_gr_cmd_with_response(cmd):
+        x_zoom, y_zoom = factor, factor
+        mat = fitz.Matrix(x_zoom, y_zoom)
+        pix = page.getPixmap(matrix = mat)
+        cmd = {'i': n + 1, 't': 'd', 'f': 24, 's': pix.width, 'v': pix.height, 'z': 0}
+        write_chunked(cmd, pix.samples)
+        cmd = {'a': 'p', 'i': n + 1, 'z': 0}
+        write_gr_cmd_with_response(cmd)
+
+def clean_quit():
+    curses.curs_set(1) # show the cursor
+    #show_cursor()
+    cmd = {'a': 'd', 'd': 'Z', 'z': 0}
+    write_gr_cmd(cmd)
+    raise SystemExit()
+
+def resize_handler(signum, frame):
+    cmd = {'a': 'd', 'd': 'Z', 'z': 0}
+    write_gr_cmd(cmd)
+    screen_size = screen_size_function()
+    ss_width = screen_size().width
+    ss_height = screen_size().height
+    return
+
+def refresh_images(doc, n):
+    cmd = {'a': 'd', 'd': 'Z', 'z': 0}
+    write_gr_cmd(cmd)
+    refresh_screen(doc, n)
+
+def display_bar(doc, n, cmd="               "):
+    p = str(n + 1)
+    t = doc.pageCount
+    r = screen_size().rows
+    c = screen_size().cols
+    left_bar = '[{}/{}]'.format(p, t)
+    set_cursor(c - len(left_bar), r)
+    sys.stdout.write(left_bar)
+    sys.stdout.flush()
+    set_cursor(1,r)
+    sys.stdout.write(cmd)
+    sys.stdout.flush()
+
+def refresh_screen(doc, n):
+    display_page(doc, n)
+    display_bar(doc, n)
+    return
+
+def g_command(doc, n, count_string):
+    while True:
+        char = ord(sys.stdin.read(1))
+        if chr(char) == "g":
+            display_bar(doc, n, str(count_string) + "gg")
+            clear_page(n)
+            refresh_screen(doc, 0)
+        else:
+            return
+
+
+
+def viewer(doc):
+    stdscr = curses.initscr()
+    clear_screen()
+    curses.curs_set(0) # hide cursor
+
+    pages = doc.pageCount - 1
+    n = 0
+    tty.setraw(sys.stdin)
+    refresh_screen(doc, n)
+    count_string = ""
+    while True:
+        if count_string == "":
+            count = 1
+        else:
+            count = int(count_string)
+        char = ord(sys.stdin.read(1))
+        if char == 27: # ESC Hack
+            sys.stdin.read(10)
+        elif char in range(48, 57): # i.e., is a numeral
+            count_string = count_string + chr(char)
+            display_bar(doc, n, count_string)
+        elif char == 3 or chr(char) == "q": # CTRL-C
+            clean_quit()
+        elif chr(char) == "j" or chr(char) == " ":
+            display_bar(doc, n, count_string + chr(char))
+            clear_page(n)
+            n = min(n + count, pages)
+            refresh_screen(doc, n)
+            count_string = ""
+        elif chr(char) == "k":
+            display_bar(doc, n, count_string + chr(char))
+            clear_page(n)
+            n = max(0, n - count) 
+            refresh_screen(doc, n)
+            count_string = ""
+        elif chr(char) == "G":
+            display_bar(doc, n, count_string + chr(char))
+            if count_string != "" and 1 <= count <= pages:
+               clear_page(n)
+               n = count - 1
+            else: 
+               clear_page(n)
+               n = pages
+            refresh_screen(doc, n)
+            count_string = ""
+        elif chr(char) == "g":
+            display_bar(doc, n, count_string + chr(char))
+            g_command(doc, n, count_string)
+            count_string = ""
+        elif chr(char) == "R":
+            refresh_images(doc, n)
+            count_string = ""
+        else:
+            count_string = ""
+
+        
+def open_file(item):
+    try:
+        doc = fitz.open(item)
+    except:
+        raise SystemExit('Unable to open "{}".'.format(item))
+    if not doc.isPDF:
+        raise SystemExit('Document is not a PDF file')
+    viewer(doc)
+
+def main(args=sys.argv):
+    global screen_size
+    global pages
+
+    #signal.signal(signal.SIGWINCH, resize_handler)
+
+    screen_size = screen_size_function()
+    if screen_size().width == 0:
+        raise SystemExit(
+            'Terminal does not support reporting screen sizes via the TIOCGWINSZ ioctl'
+        )
+    if len(args) != 2:
+        raise SystemExit('You must specify exactly one file to view.')
+    for item in args[1:]:
+        open_file(item)
+
+if __name__ == '__main__':
+    main()
+elif __name__ == '__doc__':
+    sys.cli_docs['usage'] = usage
+    sys.cli_docs['options'] = options_spec
+    sys.cli_docs['help_text'] = help_text
