@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
 # vim:fileencoding=utf-8
+"""\
+Usage:
+    kitty-pdf example.pdf
+
+Options:
+    currently, no options
+
+Key Bindings:
+    see the shortcuts at the beginning of the file
+"""
+
+__version__ = "0.1"
+__license__ = "MIT"
+__author__ = "David Sanson"
+__url__ = "https://github.com/dsanson/kitty-pdf"
 
 import array
 import curses
@@ -18,9 +33,26 @@ from base64 import standard_b64encode
 from collections import namedtuple
 from io import TextIOWrapper, BytesIO
 from math import ceil
-from time import sleep
+from time import sleep, monotonic
 
+# Keyboard shortcuts
+GOTO_PAGE     = {ord("G")}
+GOTO          = {ord("g")}
+NEXT_PAGE     = {ord("j"), ord(" ")}
+PREV_PAGE     = {ord("k")}
+NEXT_CHAP     = {ord("l")}
+PREV_CHAP     = {ord("h")}
+ROTATE_CW     = {ord("r")}
+ROTATE_CCW    = {ord("R")}
+TOGGLE_ALPHA  = {ord("a")}
+TOGGLE_INVERT = {ord("i")}
+TOGGLE_TINT   = {ord("t")}
+REFRESH       = {18}            # CTRL-R
+QUIT          = {3, ord("q")}
+DEBUG         = {ord("D")}
 
+# Defaults
+TINT_COLOR    = "antiquewhite2"
 
 def screen_size_function(fd=None):
     # ans = getattr(screen_size_function, 'ans', None)
@@ -43,16 +75,6 @@ def screen_size_function(fd=None):
     ans = screen_size_function.ans = screen_size
 
     return ans
-
-def calculate_in_cell_x_offset(width, cell_width, align):
-    if align == 'left':
-        return 0
-    extra_pixels = width % cell_width
-    if not extra_pixels:
-        return 0
-    if align == 'right':
-        return cell_width - extra_pixels
-    return (cell_width - extra_pixels) // 2
 
 def serialize_gr_command(cmd, payload=None):
    cmd = ','.join('{}={}'.format(k, v) for k, v in cmd.items())
@@ -94,12 +116,6 @@ def write_chunked(cmd, data):
 def set_cursor(x_place, y_place):
     sys.stdout.buffer.write('\033[{};{}f'.format(y_place, x_place).encode('ascii'))
 
-def hide_cursor():
-    sys.stdout.buffer.write('\033[?25l'.encode('ascii'))
-
-def show_cursor():
-    sys.stdout.buffer.write('\033[?25h'.encode('ascii'))
-
 def set_image_cursor(display_width, display_height, ss_width, ss_height):
     x_place_pixels = (ss_width / 2) - (display_width / 2)
     x_place = int(ceil(x_place_pixels / screen_size().cell_width) - 1)
@@ -115,10 +131,15 @@ def clear_page(n):
     cmd = {'a': 'd', 'i': n + 1}
     write_gr_cmd(cmd)
 
-def display_page(doc, n):
+def display_page(doc, n, opts):
+    global is_stale
     page = doc.loadPage(n)
-    page_width = page.bound().width
-    page_height = page.bound().height
+    if opts["rotation"] == 0 or opts["rotation"] == 180:
+        page_width = page.bound().width
+        page_height = page.bound().height
+    else:
+        page_width = page.bound().height
+        page_height = page.bound().width
     screen_size = screen_size_function()
     ss_width = screen_size().width
     ss_height = screen_size().height
@@ -129,14 +150,28 @@ def display_page(doc, n):
     display_height = factor * page_height
     set_image_cursor(display_width, display_height, ss_width, ss_height)
     cmd = {'a': 'p', 'i': n + 1, 'z': 0}
-    if not write_gr_cmd_with_response(cmd):
+    if is_stale[n] or not write_gr_cmd_with_response(cmd):
         x_zoom, y_zoom = factor, factor
         mat = fitz.Matrix(x_zoom, y_zoom)
-        pix = page.getPixmap(matrix = mat)
-        cmd = {'i': n + 1, 't': 'd', 'f': 24, 's': pix.width, 'v': pix.height, 'z': 0}
+        mat = mat.preRotate(opts["rotation"])
+        pix = page.getPixmap(matrix = mat, alpha=opts["alpha"])
+        cmd = {'i': n + 1, 't': 'd', 's': pix.width, 'v': pix.height}
+        if opts["alpha"]:
+            cmd['f'] = 32
+        else:
+            cmd['f'] = 24
+        if opts["tint"]:
+            tint = fitz.utils.getColor(TINT_COLOR)
+            red = int(tint[0] * 256)
+            blue = int(tint[1] * 256)
+            green = int(tint[2] * 256)
+            pix.tintWith(red,blue,green)
+        if opts["invert"]:
+            pix.invertIRect()
         write_chunked(cmd, pix.samples)
         cmd = {'a': 'p', 'i': n + 1, 'z': 0}
         write_gr_cmd_with_response(cmd)
+        is_stale[n] = False
 
 def clean_quit():
     curses.curs_set(1) # show the cursor
@@ -153,17 +188,16 @@ def resize_handler(signum, frame):
     ss_height = screen_size().height
     return
 
-def refresh_images(doc, n):
-    cmd = {'a': 'd', 'd': 'Z', 'z': 0}
-    write_gr_cmd(cmd)
-    refresh_screen(doc, n)
+def refresh_images(*args):
+    global is_stale
+    is_stale = [True] * len(is_stale)
 
-def display_bar(doc, n, cmd="               "):
+def display_bar(doc, n, cmd=" " * 10):
     p = str(n + 1)
     t = doc.pageCount
     r = screen_size().rows
     c = screen_size().cols
-    left_bar = '[{}/{}]'.format(p, t)
+    left_bar = ' ' * 5 + '[{}/{}]'.format(p, t)
     set_cursor(c - len(left_bar), r)
     sys.stdout.write(left_bar)
     sys.stdout.flush()
@@ -171,76 +205,169 @@ def display_bar(doc, n, cmd="               "):
     sys.stdout.write(cmd)
     sys.stdout.flush()
 
-def refresh_screen(doc, n):
-    display_page(doc, n)
+def refresh_screen(doc, n, opts):
+    #clear_screen()
+    display_page(doc, n, opts)
     display_bar(doc, n)
     return
 
-def g_command(doc, n, count_string):
-    while True:
-        char = ord(sys.stdin.read(1))
-        if chr(char) == "g":
-            display_bar(doc, n, str(count_string) + "gg")
-            clear_page(n)
-            refresh_screen(doc, 0)
-        else:
-            return
+def parse_toc(doc):
+    toc = doc.getToC()
+    return toc
 
+def init_is_stale(pages):
+    global is_stale
+    is_stale = [True] * (pages + 1)
 
+# Movement functions
+
+def next_chapter(doc, n, count=1):
+    toc = parse_toc(doc)
+    if toc:
+        for ch in toc:
+            ch_page = ch[2] - 1
+            if ch_page > n:
+                count -= 1
+            if count == 0:
+                return ch_page 
+        return ch_page # go to last chapter 
+    else:
+        return n
+
+def prev_chapter(doc, n, count=1):
+    toc = parse_toc(doc)
+    if toc:
+        for ch in reversed(toc):
+            ch_page = ch[2] - 1
+            if ch_page < n:
+                count -= 1
+            if count == 0:
+                return ch_page 
+        return ch_page # go to first chapter 
+    else:
+        return n
+
+def goto_page(doc, current, target, opts):
+    clear_page(current)
+    pages = doc.pageCount - 1
+    if target > pages:
+        target = totalpages
+    elif target <= 0:
+        target = 0
+    refresh_screen(doc, target, opts)
+    return target
+
+def search_page(doc, current, search):
+    results = doc.searchPageFor(current, search)
+    clear_screen()
+    print(results)
+    raise SystemExit
 
 def viewer(doc):
     stdscr = curses.initscr()
     clear_screen()
     curses.curs_set(0) # hide cursor
-
+    
     pages = doc.pageCount - 1
+    init_is_stale(pages)
+
     n = 0
-    tty.setraw(sys.stdin)
-    refresh_screen(doc, n)
+    prev = 0 # null character
     count_string = ""
+    opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
+
+    tty.setraw(sys.stdin)
+    refresh_screen(doc, n, opts)
     while True:
         if count_string == "":
             count = 1
         else:
             count = int(count_string)
-        char = ord(sys.stdin.read(1))
-        if char == 27: # ESC Hack
-            sys.stdin.read(10)
-        elif char in range(48, 57): # i.e., is a numeral
-            count_string = count_string + chr(char)
-            display_bar(doc, n, count_string)
-        elif char == 3 or chr(char) == "q": # CTRL-C
-            clean_quit()
-        elif chr(char) == "j" or chr(char) == " ":
-            display_bar(doc, n, count_string + chr(char))
-            clear_page(n)
-            n = min(n + count, pages)
-            refresh_screen(doc, n)
-            count_string = ""
-        elif chr(char) == "k":
-            display_bar(doc, n, count_string + chr(char))
-            clear_page(n)
-            n = max(0, n - count) 
-            refresh_screen(doc, n)
-            count_string = ""
-        elif chr(char) == "G":
-            display_bar(doc, n, count_string + chr(char))
-            if count_string != "" and 1 <= count <= pages:
-               clear_page(n)
-               n = count - 1
-            else: 
-               clear_page(n)
-               n = pages
-            refresh_screen(doc, n)
-            count_string = ""
-        elif chr(char) == "g":
-            display_bar(doc, n, count_string + chr(char))
-            g_command(doc, n, count_string)
-            count_string = ""
-        elif chr(char) == "R":
-            refresh_images(doc, n)
-            count_string = ""
+
+        # read from buffer, so we can capture stray ESC codes
+        raw_char = sys.stdin.buffer.read(1)
+        if raw_char == b'\033':
+            char = 27
         else:
+            char = ord(raw_char.decode("utf-8"))
+            display_bar(doc, n, count_string + chr(char)) # echo input
+        if char in range(48, 57): # i.e., is a numeral
+            count_string = count_string + chr(char)
+        else:
+            if prev == 27 and chr(char) == "_": # clobber stray ESC codes 
+                r = b''
+                while r[-2:] != b'\033\\':
+                    r += sys.stdin.buffer.read(1)
+                prev = 0
+            # arrow commands
+            elif prev == 27 and chr(char) == "[":
+                char = sys.stdin.buffer.read(1)
+                if char == b'A': # UP ARROW
+                    target = n - 1
+                    n = goto_page(doc, n, target, opts)
+                elif char == b'B': # DOWN ARROW
+                    target = n + 1
+                    n = goto_page(doc, n, target, opts)
+                elif char == b'C': # RIGHT ARROW
+                    target = next_chapter(doc, n)
+                    n = goto_page(doc, n, target, opts)
+                elif char == b'D': # LEFT ARROW
+                    target = prev_chapter(doc, n)
+                    n = goto_page(doc, n, target, opts)
+                char = 0
+            elif char in QUIT: 
+                clean_quit()
+            # movement commands
+            elif char in GOTO_PAGE:
+                if count_string != "":
+                   target = count - 1
+                else: 
+                   target = pages
+                n = goto_page(doc, n, target, opts)
+            elif char in NEXT_PAGE:
+                target = n + count
+                n = goto_page(doc, n, target, opts)
+            elif char in PREV_PAGE:
+                target = n - count
+                n = goto_page(doc, n, target, opts)
+            elif char in NEXT_CHAP:
+                target = next_chapter(doc, n, count)
+                n = goto_page(doc, n, target, opts)
+            elif char in PREV_CHAP:
+                target = prev_chapter(doc, n, count)
+                n = goto_page(doc, n, target, opts)
+            elif prev in GOTO and char in GOTO:
+                n = goto_page(doc, n, 0, opts)
+            elif char in ROTATE_CW:
+                opts["rotation"] = (opts["rotation"] + 90 * count) % 360
+                refresh_images()
+                refresh_screen(doc, n, opts)
+            elif char in ROTATE_CCW:
+                opts["rotation"] = (opts["rotation"] - 90 * count) % 360
+                refresh_images()
+                refresh_screen(doc, n, opts)
+            elif char in TOGGLE_ALPHA:
+                opts["alpha"] = not opts["alpha"]
+                refresh_images()
+                refresh_screen(doc, n, opts)
+            elif char in TOGGLE_INVERT:
+                opts["invert"]  = not opts["invert"]
+                refresh_images()
+                refresh_screen(doc, n, opts)
+            elif char in TOGGLE_TINT:
+                opts["tint"] = not opts["tint"]
+                refresh_images()
+                refresh_screen(doc, n, opts)
+            elif char in REFRESH: # Ctrl-R
+                refresh_images()
+                refresh_screen(doc, n, opts)
+            elif char in DEBUG:
+                # a spot for messing around with ideas
+                # pass
+                search_page(doc, n, "the")
+
+
+            prev = char  
             count_string = ""
 
         
@@ -255,9 +382,10 @@ def open_file(item):
 
 def main(args=sys.argv):
     global screen_size
-    global pages
+    global is_stale
+    is_stale = []
 
-    #signal.signal(signal.SIGWINCH, resize_handler)
+    signal.signal(signal.SIGWINCH, refresh_images)
 
     screen_size = screen_size_function()
     if screen_size().width == 0:
@@ -271,7 +399,4 @@ def main(args=sys.argv):
 
 if __name__ == '__main__':
     main()
-elif __name__ == '__doc__':
-    sys.cli_docs['usage'] = usage
-    sys.cli_docs['options'] = options_spec
-    sys.cli_docs['help_text'] = help_text
+
