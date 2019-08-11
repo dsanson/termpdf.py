@@ -17,7 +17,7 @@ more powerful---but less portable---replacement for
 -   Less buggy because it won't be a lovable but ridiculous hack of a bash
     script wrapped around a bunch of command line tools.
 
-This is alpha version software. Expect bugs and undocumented dependencies. The
+This is pre-alpha software. Expect bugs and undocumented dependencies. The
 goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 
 # Screenshot
