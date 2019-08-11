@@ -596,8 +596,6 @@ def main(args=sys.argv):
         doc = fitz.open(args[1])
     except:
         raise SystemExit('Unable to open "{}".'.format(item))
-    if not doc.isPDF:
-        raise SystemExit('Document is not a PDF file')
 
     viewer(doc)
 
