@@ -1,6 +1,6 @@
 # `kitty-pdf`
 
-A PDF viewer, written in python, that works inside
+A document viewer, written in python, that works inside
 [kitty](https://sw.kovidgoyal.net/kitty/). Hopefully a faster, less buggy,
 more powerful---but less portable---replacement for
 [termpdf](https://github.com/dsanson/termpdf).
@@ -11,7 +11,7 @@ protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol.html) implemented
 by kitty.
 
 -   More powerful because [PyMuPDF](https://pymupdf.readthedocs.io/) offers
-    fast image conversion access to lots of PDF features.
+    fast image conversion and access to lots of features.
 
 -   Less buggy because it won't be a lovable but ridiculous hack of a bash script wrapped
     around a bunch of command line tools.
@@ -21,30 +21,75 @@ goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 
 # Features
 
+## Document Formats
+
+-   [x] supports the formats supported by mupdf. Tested with:
+    -   [x] PDF
+    -   [x] ePub
+    -   [x] Html
+    -   [x] CBZ
+    -   [x] JPEG
+-   [] add additional format support using other tools
+    -   [] DJVU
+    -   [] CBR
+    -   [] DOCX 
+    -   [] ODT
+    -   [] PPTX
+    -   [] formats from which pandoc can generate html?
+-   [] Support for encrypted documents
+
+## Commands and Interaction
+
+-   [] vim-style ex-mode
+-   [] configuration file
+-   [] Open multiple documents at once ("buffers")
+    -   [] synced plain text buffer
+-   [] Remote control from other apps
+    -   [] SyncTeX support
+-   [] OCR
+-   [] Note-taking integration ala org-noter
+-   [] Extract document doi/isbn
+    -   [] and add to metadata
+    -   [] and pass to external command for fetching reference data 
+
+## Navigation 
+
 -   [x] vim-style navigation
     -   [x] next-page, prev-page (with counts)
     -   [x] next-chapter, prev-chapter (with counts)
     -   [x] jump to page number
     -   [x] jump to beginning, end of document
--   [] vim-style ex-mode
 -   [x] navigate via table of contents
+    -   [] outline folding support
+-   []  navigate with bookmarks
+-   [] Thumbnail mode
+    -   [] Navigation
+    -   [] Deleting pages
+    -   [] Adding pages
+    -   [] Moving pages within document
+    -   [] Creating new document from selected pages
+-   [] Follow/fetch links in document
+
+## Image Manipulation
+
 -   [x] view document metadata
     - [] edit metadata
 -   [x] page rotation
 -   [x] toggle transparency
 -   [x] invert colors ("dark mode")
 -   [x] toggle tinted background
--   [] Open multiple documents at once
--   [] Open other document formats
-    -   [] epub, cbr, cbz: all "supported" by pymupdf
-    -   [] djvu?
--   [] configurable shortcuts, tint color, etc.
 -   [] Cropping and zooming
+-   [] Reflowing (for ePub and Html)
+
+## Annotations and Editing
+
 -   [] Add and edit annotations
 -   [] Add and navigate with bookmarks
--   [] Follow/fetch links in document
 -   [] Fill out forms
     -   [] Document signing?
+
+## Visual and Mouse modes
+
 -   [] Keyboard visual mode
     -   [] Select by word
     -   [] Select by rectangle
@@ -59,21 +104,7 @@ goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
     -   [] Copy image selection
     -   [] Insert annotation
     -   [] Splitting pages
--   [] SyncTeX support
--   [] Thumbnail mode
-    -   [] Navigation
-    -   [] Deleting pages
-    -   [] Adding pages
-    -   [] Moving pages within document
-    -   [] Creating new document from selected pages
--   [] OCR
--   [] Remote control from other apps
--   [] Note-taking integration ala org-noter
--   [] Support for encrypted documents
--   [] Extract document doi/isbn
-    -   [] and add to metadata
-    -   [] and pass to external command for fetching reference data 
--   [] Plain text mode (?)
+
 
 # Dependencies
 
