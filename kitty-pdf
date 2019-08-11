@@ -22,7 +22,6 @@ import fcntl
 import fitz
 import os
 import re
-import readchar
 import signal
 import subprocess
 import sys
