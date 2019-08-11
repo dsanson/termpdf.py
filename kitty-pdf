@@ -38,21 +38,22 @@ from time import sleep, monotonic
 # Keyboard shortcuts
 GOTO_PAGE     = {ord("G")}
 GOTO          = {ord("g")}
-NEXT_PAGE     = {ord("j"), ord(" ")}
-PREV_PAGE     = {ord("k")}
-NEXT_CHAP     = {ord("l")}
-PREV_CHAP     = {ord("h")}
+NEXT_PAGE     = {ord("j"), curses.KEY_DOWN, ord(" ")}
+PREV_PAGE     = {ord("k"), curses.KEY_UP}
+NEXT_CHAP     = {ord("l"), curses.KEY_RIGHT}
+PREV_CHAP     = {ord("h"), curses.KEY_LEFT}
 ROTATE_CW     = {ord("r")}
 ROTATE_CCW    = {ord("R")}
 TOGGLE_ALPHA  = {ord("a")}
 TOGGLE_INVERT = {ord("i")}
 TOGGLE_TINT   = {ord("t")}
-REFRESH       = {18}            # CTRL-R
+REFRESH       = {18, curses.KEY_RESIZE}            # CTRL-R
 QUIT          = {3, ord("q")}
 DEBUG         = {ord("D")}
 
 # Defaults
 TINT_COLOR    = "antiquewhite2"
+ZINDEX        = -1
 
 def screen_size_function(fd=None):
     # ans = getattr(screen_size_function, 'ans', None)
@@ -128,7 +129,7 @@ def set_image_cursor(display_width, display_height, ss_width, ss_height):
 def clear_screen():
     sys.stdout.buffer.write('\033[2J'.encode('ascii'))
     #subprocess.run('clear')
-    #cmd = {'a': 'd', 'd': 'Z', 'z': 1} 
+    #cmd = {'a': 'd', 'd': 'Z', 'z': ZINDEX} 
     #write_gr_cmd(cmd)
 
 def clear_page(n):
@@ -153,7 +154,7 @@ def display_page(doc, n, opts):
     display_width = factor * page_width
     display_height = factor * page_height
     set_image_cursor(display_width, display_height, ss_width, ss_height)
-    cmd = {'a': 'p', 'i': n + 1, 'z': 1}
+    cmd = {'a': 'p', 'i': n + 1, 'z': ZINDEX}
     if is_stale[n] or not write_gr_cmd_with_response(cmd):
         x_zoom, y_zoom = factor, factor
         mat = fitz.Matrix(x_zoom, y_zoom)
@@ -173,12 +174,12 @@ def display_page(doc, n, opts):
         if opts["invert"]:
             pix.invertIRect()
         write_chunked(cmd, pix.samples)
-        cmd = {'a': 'p', 'i': n + 1, 'z': 1}
+        cmd = {'a': 'p', 'i': n + 1, 'z': ZINDEX}
         write_gr_cmd_with_response(cmd)
         is_stale[n] = False
 
 def clean_quit(stdscr, doc):
-    cmd = {'a': 'd', 'd': 'Z', 'z': 1}
+    cmd = {'a': 'd', 'd': 'Z', 'z': ZINDEX}
     write_gr_cmd(cmd)
     stdscr.keypad(False)
     curses.echo()
@@ -188,7 +189,7 @@ def clean_quit(stdscr, doc):
     raise SystemExit()
 
 def resize_handler(signum, frame):
-    cmd = {'a': 'd', 'd': 'Z', 'z': 1}
+    cmd = {'a': 'd', 'd': 'Z', 'z': ZINDEX}
     write_gr_cmd(cmd)
     screen_size = screen_size_function()
     ss_width = screen_size().width
@@ -212,16 +213,17 @@ def update_status_bar(doc, n, cmd):
     place_string(offset,r,right_bar)
     set_cursor(len(cmd) + 2,r)
     sys.stdout.flush()
-    
-def refresh_screen(doc, n, opts):
-    #clear_screen()
-    display_page(doc, n, opts)
-    # update_status_bar(status_bar, doc, n)
-    return
 
-def parse_toc(doc):
-    toc = doc.getToC()
-    return toc
+def update_status_bar_c(status_bar, doc, n, cmd):
+    p = str(n + 1)
+    t = doc.pageCount
+    r, c = status_bar.getmaxyx()
+    left_bar = cmd + " " * 5
+    status_bar.addstr(0,5,left_bar)
+    right_bar = '     [{}/{}]'.format(p, t)
+    offset = (c - 10) - len(right_bar)
+    status_bar.addstr(0,offset,right_bar)
+    status_bar.refresh()
 
 def mark_all_pages_as_stale(pages):
     global is_stale
@@ -230,7 +232,7 @@ def mark_all_pages_as_stale(pages):
 # Movement functions
 
 def next_chapter(doc, n, count=1):
-    toc = parse_toc(doc)
+    toc = doc.getToC()
     if toc:
         for ch in toc:
             ch_page = ch[2] - 1
@@ -243,7 +245,7 @@ def next_chapter(doc, n, count=1):
         return n
 
 def prev_chapter(doc, n, count=1):
-    toc = parse_toc(doc)
+    toc = doc.getToC()
     if toc:
         for ch in reversed(toc):
             ch_page = ch[2] - 1
@@ -284,12 +286,17 @@ def show_toc(doc,n):
 # Main Viewer
 def viewer(doc):
 
-    clear_screen()
-
     stdscr = curses.initscr()
+    stdscr.clear()
     curses.noecho()
     curses.curs_set(0) 
-    stdscr.keypad(False) # Handle our own escape codes for now
+    stdscr.keypad(True) # Handle our own escape codes for now
+    #stdscr.timeout(-1)
+    stdscr.nodelay(True)
+    stdscr.getch()
+    
+    # r, c = stdscr.getmaxyx()
+    # status_bar = curses.newwin(0,c - 1,r - 1,1)
 
     pages = doc.pageCount - 1
     mark_all_pages_as_stale(pages)
@@ -299,27 +306,38 @@ def viewer(doc):
     count_string = ""
     opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
    
-
+    
     #tty.setraw(sys.stdin)
-    update_status_bar(doc, n, "")
+    runs = 0
     while True:
-        if m != n or is_stale[n]:
+
+        # reload the after the first time, since getch seems to clobber
+        # the image the first time around.
+        if runs < 1:
+            is_stale[n]
+            runs = runs + 1
+        else:
+            stdscr.nodelay(False)
+
+        # only update when changed page or image is stale
+        if m != n or is_stale[n]: 
             display_page(doc, n, opts)
-            update_status_bar(doc, n, "")
+            update_status_bar(doc, n, str(runs))
+
         m = n
+
+        # set count based on count_string
         if count_string == "":
             count = 1
         else:
             count = int(count_string)
+ 
+        # get char
+        char = stdscr.getch()
 
-        # read from buffer, so we can capture stray ESC codes
-        raw_char = sys.stdin.buffer.read(1)
-        char = ord(raw_char.decode("utf-8"))
-
-        if char == 27:
+        # echo char to status_bar and clobber escape codes
+        if char == 27: # ESC
             update_status_bar(doc, n, "")
-            count_string = ""
-            stack[0] = 27
         elif stack[0] == 27 and chr(char) == "_": # clobber ESC code
             update_status_bar(doc, n, '<STUCK> Press ESC\\ to resume.')
             r = b''
@@ -328,28 +346,17 @@ def viewer(doc):
             update_status_bar(doc, n, '                        ')
             count_string = "" 
             stack = [0] 
-        elif not stack[0] == 27 or not chr(char) == "[": # control codes
+        elif 32 < char < 256: # printable characters
             update_status_bar(doc, n, count_string + chr(char)) # echo input
 
-        if char in range(48, 57): # i.e., is a numeral
+
+        # perform actions based on character commands
+        if char == -1:
+            pass
+        if char in range(48, 57): # increment count_string
             count_string = count_string + chr(char)
         else:
-            if stack[0] == 27 and chr(char) == "[":
-                char = sys.stdin.buffer.read(1)
-                if char == b'A': # UP ARROW
-                    target = n - 1
-                    n = goto_page(doc, n, target, opts)
-                elif char == b'B': # DOWN ARROW
-                    target = n + 1
-                    n = goto_page(doc, n, target, opts)
-                elif char == b'C': # RIGHT ARROW
-                    target = next_chapter(doc, n)
-                    n = goto_page(doc, n, target, opts)
-                elif char == b'D': # LEFT ARROW
-                    target = prev_chapter(doc, n)
-                    n = goto_page(doc, n, target, opts)
-                stack = [0] 
-            elif char in QUIT: 
+            if char in QUIT: 
                 clean_quit(stdscr, doc)
             elif char in GOTO_PAGE:
                 if count_string != "":
@@ -399,7 +406,6 @@ def viewer(doc):
                 stack = [0] 
             elif char in REFRESH: # Ctrl-R
                 mark_all_pages_as_stale(pages)
-                stack = [0] 
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
@@ -408,10 +414,11 @@ def viewer(doc):
                 stack = [0] 
             else:
                 stack = [char] + stack
-
+            
             if m != n or is_stale[m]:
                 clear_page(m)
             count_string = ""
+
 
 def main(args=sys.argv):
     global is_stale
