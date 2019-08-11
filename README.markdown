@@ -19,6 +19,12 @@ more powerful---but less portable---replacement for
 This is alpha version software. Expect bugs and undocumented dependencies. The
 goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 
+# Screenshot
+
+![Screenshot](screenshot.png)
+
+Note the alpha transparency. You can toggle this on or off by pressing `a`.
+
 # Features
 
 ## Document Formats
