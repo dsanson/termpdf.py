@@ -177,9 +177,14 @@ def display_page(doc, n, opts):
         write_gr_cmd_with_response(cmd)
         is_stale[n] = False
 
-def clean_quit():
+def clean_quit(stdscr, doc):
     cmd = {'a': 'd', 'd': 'Z', 'z': 1}
     write_gr_cmd(cmd)
+    stdscr.keypad(False)
+    curses.echo()
+    curses.curs_set(1)
+    curses.endwin()
+    doc.close()
     raise SystemExit()
 
 def resize_handler(signum, frame):
@@ -278,22 +283,29 @@ def show_toc(doc,n):
 
 # Main Viewer
 def viewer(doc):
-    # curses.initscr()
-    # curses.curs_set(0) 
+
+    clear_screen()
+
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.curs_set(0) 
+    stdscr.keypad(False) # Handle our own escape codes for now
+
     pages = doc.pageCount - 1
     mark_all_pages_as_stale(pages)
     n = 0
     m = -1
-    prev = 0 # null character
+    stack = [0] 
     count_string = ""
     opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
-    
-    tty.setraw(sys.stdin)
+   
+
+    #tty.setraw(sys.stdin)
     update_status_bar(doc, n, "")
     while True:
         if m != n or is_stale[n]:
-            update_status_bar(doc, n, "")
             display_page(doc, n, opts)
+            update_status_bar(doc, n, "")
         m = n
         if count_string == "":
             count = 1
@@ -302,20 +314,27 @@ def viewer(doc):
 
         # read from buffer, so we can capture stray ESC codes
         raw_char = sys.stdin.buffer.read(1)
-        if raw_char == b'\033':
-            char = 27
-        else:
-            char = ord(raw_char.decode("utf-8"))
+        char = ord(raw_char.decode("utf-8"))
+
+        if char == 27:
+            update_status_bar(doc, n, "")
+            count_string = ""
+            stack[0] = 27
+        elif stack[0] == 27 and chr(char) == "_": # clobber ESC code
+            update_status_bar(doc, n, '<STUCK> Press ESC\\ to resume.')
+            r = b''
+            while r[-2:] != b'\033\\':
+                r += sys.stdin.buffer.read(1)
+            update_status_bar(doc, n, '                        ')
+            count_string = "" 
+            stack = [0] 
+        elif not stack[0] == 27 or not chr(char) == "[": # control codes
             update_status_bar(doc, n, count_string + chr(char)) # echo input
+
         if char in range(48, 57): # i.e., is a numeral
             count_string = count_string + chr(char)
         else:
-            if prev == 27 and chr(char) == "_": # clobber stray ESC codes 
-                r = b''
-                while r[-2:] != b'\033\\':
-                    r += sys.stdin.buffer.read(1)
-                prev = 0
-            elif prev == 27 and chr(char) == "[":
+            if stack[0] == 27 and chr(char) == "[":
                 char = sys.stdin.buffer.read(1)
                 if char == b'A': # UP ARROW
                     target = n - 1
@@ -329,55 +348,69 @@ def viewer(doc):
                 elif char == b'D': # LEFT ARROW
                     target = prev_chapter(doc, n)
                     n = goto_page(doc, n, target, opts)
-                char = 0
+                stack = [0] 
             elif char in QUIT: 
-                clean_quit()
+                clean_quit(stdscr, doc)
             elif char in GOTO_PAGE:
                 if count_string != "":
                    target = count - 1
                 else: 
                    target = pages
                 n = goto_page(doc, n, target, opts)
+                stack = [0] 
             elif char in NEXT_PAGE:
                 target = n + count
                 n = goto_page(doc, n, target, opts)
+                stack = [0] 
             elif char in PREV_PAGE:
                 target = n - count
                 n = goto_page(doc, n, target, opts)
+                stack = [0] 
             elif char in NEXT_CHAP:
                 target = next_chapter(doc, n, count)
                 n = goto_page(doc, n, target, opts)
+                stack = [0] 
             elif char in PREV_CHAP:
                 target = prev_chapter(doc, n, count)
                 n = goto_page(doc, n, target, opts)
-            elif prev in GOTO and char in GOTO:
+                stack = [0] 
+            elif stack[0] in GOTO and char in GOTO:
                 n = goto_page(doc, n, 0, opts)
+                stack = [0] 
             elif char in ROTATE_CW:
                 opts["rotation"] = (opts["rotation"] + 90 * count) % 360
                 mark_all_pages_as_stale(pages)
+                stack = [0] 
             elif char in ROTATE_CCW:
                 opts["rotation"] = (opts["rotation"] - 90 * count) % 360
                 mark_all_pages_as_stale(pages)
+                stack = [0] 
             elif char in TOGGLE_ALPHA:
                 opts["alpha"] = not opts["alpha"]
                 mark_all_pages_as_stale(pages)
+                stack = [0] 
             elif char in TOGGLE_INVERT:
                 opts["invert"]  = not opts["invert"]
                 mark_all_pages_as_stale(pages)
+                stack = [0] 
             elif char in TOGGLE_TINT:
                 opts["tint"] = not opts["tint"]
                 mark_all_pages_as_stale(pages)
+                stack = [0] 
             elif char in REFRESH: # Ctrl-R
                 mark_all_pages_as_stale(pages)
+                stack = [0] 
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
                 show_toc(doc,n)
                 # pass
+                stack = [0] 
+            else:
+                stack = [char] + stack
 
             if m != n or is_stale[m]:
                 clear_page(m)
-            prev = char
             count_string = ""
 
 def main(args=sys.argv):
@@ -398,7 +431,7 @@ def main(args=sys.argv):
         raise SystemExit('Unable to open "{}".'.format(item))
     if not doc.isPDF:
         raise SystemExit('Document is not a PDF file')
-    subprocess.run('clear')
+
     viewer(doc)
 
 if __name__ == '__main__':
