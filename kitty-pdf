@@ -119,13 +119,17 @@ def set_cursor(x_place, y_place):
 def set_image_cursor(display_width, display_height, ss_width, ss_height):
     x_place_pixels = (ss_width / 2) - (display_width / 2)
     x_place = int(ceil(x_place_pixels / screen_size().cell_width) - 1)
-    y_place = 1
+    x_place = max(0,x_place)
+    y_place_pixels = (ss_height / 2) - (display_height / 2)
+    y_place = int(ceil(y_place_pixels / screen_size().cell_height) - 1)
+    y_place = max(0,y_place)
     set_cursor(x_place, y_place)
 
 def clear_screen():
-    subprocess.run('clear')
-    cmd = {'a': 'd', 'd': 'Z', 'z': 0} 
-    write_gr_cmd(cmd)
+    sys.stdout.buffer.write('\033[2J'.encode('ascii'))
+    #subprocess.run('clear')
+    #cmd = {'a': 'd', 'd': 'Z', 'z': 1} 
+    #write_gr_cmd(cmd)
 
 def clear_page(n):
     cmd = {'a': 'd', 'i': n + 1}
@@ -142,14 +146,14 @@ def display_page(doc, n, opts):
         page_height = page.bound().width
     screen_size = screen_size_function()
     ss_width = screen_size().width
-    ss_height = screen_size().height
+    ss_height = (screen_size().height - screen_size().cell_height)
     x_factor = ss_width / page_width
-    y_factor = (ss_height - screen_size().cell_height) / page_height
+    y_factor = ss_height / page_height
     factor = min(x_factor, y_factor)
     display_width = factor * page_width
     display_height = factor * page_height
     set_image_cursor(display_width, display_height, ss_width, ss_height)
-    cmd = {'a': 'p', 'i': n + 1, 'z': 0}
+    cmd = {'a': 'p', 'i': n + 1, 'z': 1}
     if is_stale[n] or not write_gr_cmd_with_response(cmd):
         x_zoom, y_zoom = factor, factor
         mat = fitz.Matrix(x_zoom, y_zoom)
@@ -169,53 +173,52 @@ def display_page(doc, n, opts):
         if opts["invert"]:
             pix.invertIRect()
         write_chunked(cmd, pix.samples)
-        cmd = {'a': 'p', 'i': n + 1, 'z': 0}
+        cmd = {'a': 'p', 'i': n + 1, 'z': 1}
         write_gr_cmd_with_response(cmd)
         is_stale[n] = False
 
 def clean_quit():
-    curses.curs_set(1) # show the cursor
-    #show_cursor()
-    cmd = {'a': 'd', 'd': 'Z', 'z': 0}
+    cmd = {'a': 'd', 'd': 'Z', 'z': 1}
     write_gr_cmd(cmd)
     raise SystemExit()
 
 def resize_handler(signum, frame):
-    cmd = {'a': 'd', 'd': 'Z', 'z': 0}
+    cmd = {'a': 'd', 'd': 'Z', 'z': 1}
     write_gr_cmd(cmd)
     screen_size = screen_size_function()
     ss_width = screen_size().width
     ss_height = screen_size().height
     return
 
-def refresh_images(*args):
-    global is_stale
-    is_stale = [True] * len(is_stale)
+def place_string(c,r,string):
+    set_cursor(c,r)
+    sys.stdout.write(string)
+    sys.stdout.flush()
 
-def display_bar(doc, n, cmd=" " * 10):
+def update_status_bar(doc, n, cmd):
     p = str(n + 1)
     t = doc.pageCount
-    r = screen_size().rows
     c = screen_size().cols
-    left_bar = ' ' * 5 + '[{}/{}]'.format(p, t)
-    set_cursor(c - len(left_bar), r)
-    sys.stdout.write(left_bar)
+    r = screen_size().rows
+    left_bar = cmd + " " * 5
+    place_string(1,r,left_bar)
+    right_bar = '     [{}/{}]'.format(p, t)
+    offset = c - len(right_bar)
+    place_string(offset,r,right_bar)
+    set_cursor(len(cmd) + 2,r)
     sys.stdout.flush()
-    set_cursor(1,r)
-    sys.stdout.write(cmd)
-    sys.stdout.flush()
-
+    
 def refresh_screen(doc, n, opts):
     #clear_screen()
     display_page(doc, n, opts)
-    display_bar(doc, n)
+    # update_status_bar(status_bar, doc, n)
     return
 
 def parse_toc(doc):
     toc = doc.getToC()
     return toc
 
-def init_is_stale(pages):
+def mark_all_pages_as_stale(pages):
     global is_stale
     is_stale = [True] * (pages + 1)
 
@@ -248,13 +251,11 @@ def prev_chapter(doc, n, count=1):
         return n
 
 def goto_page(doc, current, target, opts):
-    clear_page(current)
     pages = doc.pageCount - 1
     if target > pages:
-        target = totalpages
+        target = pages
     elif target <= 0:
         target = 0
-    refresh_screen(doc, target, opts)
     return target
 
 # Works in progress
@@ -275,25 +276,25 @@ def show_toc(doc,n):
     print(toc_text)
     raise SystemExit
 
-
-
 # Main Viewer
 def viewer(doc):
-    stdscr = curses.initscr()
-    clear_screen()
-    curses.curs_set(0) # hide cursor
-    
+    # curses.initscr()
+    # curses.curs_set(0) 
     pages = doc.pageCount - 1
-    init_is_stale(pages)
-
+    mark_all_pages_as_stale(pages)
     n = 0
+    m = -1
     prev = 0 # null character
     count_string = ""
     opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
-
+    
     tty.setraw(sys.stdin)
-    refresh_screen(doc, n, opts)
+    update_status_bar(doc, n, "")
     while True:
+        if m != n or is_stale[n]:
+            update_status_bar(doc, n, "")
+            display_page(doc, n, opts)
+        m = n
         if count_string == "":
             count = 1
         else:
@@ -305,7 +306,7 @@ def viewer(doc):
             char = 27
         else:
             char = ord(raw_char.decode("utf-8"))
-            display_bar(doc, n, count_string + chr(char)) # echo input
+            update_status_bar(doc, n, count_string + chr(char)) # echo input
         if char in range(48, 57): # i.e., is a numeral
             count_string = count_string + chr(char)
         else:
@@ -314,7 +315,6 @@ def viewer(doc):
                 while r[-2:] != b'\033\\':
                     r += sys.stdin.buffer.read(1)
                 prev = 0
-            # arrow commands
             elif prev == 27 and chr(char) == "[":
                 char = sys.stdin.buffer.read(1)
                 if char == b'A': # UP ARROW
@@ -332,7 +332,6 @@ def viewer(doc):
                 char = 0
             elif char in QUIT: 
                 clean_quit()
-            # movement commands
             elif char in GOTO_PAGE:
                 if count_string != "":
                    target = count - 1
@@ -355,54 +354,36 @@ def viewer(doc):
                 n = goto_page(doc, n, 0, opts)
             elif char in ROTATE_CW:
                 opts["rotation"] = (opts["rotation"] + 90 * count) % 360
-                refresh_images()
-                refresh_screen(doc, n, opts)
+                mark_all_pages_as_stale(pages)
             elif char in ROTATE_CCW:
                 opts["rotation"] = (opts["rotation"] - 90 * count) % 360
-                refresh_images()
-                refresh_screen(doc, n, opts)
+                mark_all_pages_as_stale(pages)
             elif char in TOGGLE_ALPHA:
                 opts["alpha"] = not opts["alpha"]
-                refresh_images()
-                refresh_screen(doc, n, opts)
+                mark_all_pages_as_stale(pages)
             elif char in TOGGLE_INVERT:
                 opts["invert"]  = not opts["invert"]
-                refresh_images()
-                refresh_screen(doc, n, opts)
+                mark_all_pages_as_stale(pages)
             elif char in TOGGLE_TINT:
                 opts["tint"] = not opts["tint"]
-                refresh_images()
-                refresh_screen(doc, n, opts)
+                mark_all_pages_as_stale(pages)
             elif char in REFRESH: # Ctrl-R
-                refresh_images()
-                refresh_screen(doc, n, opts)
+                mark_all_pages_as_stale(pages)
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
                 show_toc(doc,n)
                 # pass
 
-
-            prev = char  
+            if m != n or is_stale[m]:
+                clear_page(m)
+            prev = char
             count_string = ""
 
-        
-def open_file(item):
-    try:
-        doc = fitz.open(item)
-    except:
-        raise SystemExit('Unable to open "{}".'.format(item))
-    if not doc.isPDF:
-        raise SystemExit('Document is not a PDF file')
-    viewer(doc)
-
 def main(args=sys.argv):
-    global screen_size
     global is_stale
     is_stale = []
-
-    signal.signal(signal.SIGWINCH, refresh_images)
-
+    global screen_size
     screen_size = screen_size_function()
     if screen_size().width == 0:
         raise SystemExit(
@@ -410,8 +391,15 @@ def main(args=sys.argv):
         )
     if len(args) != 2:
         raise SystemExit('You must specify exactly one file to view.')
-    for item in args[1:]:
-        open_file(item)
+
+    try:
+        doc = fitz.open(args[1])
+    except:
+        raise SystemExit('Unable to open "{}".'.format(item))
+    if not doc.isPDF:
+        raise SystemExit('Document is not a PDF file')
+    subprocess.run('clear')
+    viewer(doc)
 
 if __name__ == '__main__':
     main()
