@@ -1,4 +1,4 @@
-# `kitty-pdf`
+# `termpdf.py`
 
 A document viewer, written in python, that works inside
 [kitty](https://sw.kovidgoyal.net/kitty/). Hopefully a faster, less buggy,
@@ -10,11 +10,12 @@ more powerful---but less portable---replacement for
     protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol.html)
     implemented by kitty.
 
--   Faster and more powerful because [PyMuPDF](https://pymupdf.readthedocs.io/) offers
-    fast image conversion and access to lots of features.
+-   Faster and more powerful because
+    [PyMuPDF](https://pymupdf.readthedocs.io/) offers fast image conversion
+    and access to lots of features.
 
--   Less buggy because it won't be a lovable but ridiculous hack of a bash script wrapped
-    around a bunch of command line tools.
+-   Less buggy because it won't be a lovable but ridiculous hack of a bash
+    script wrapped around a bunch of command line tools.
 
 This is alpha version software. Expect bugs and undocumented dependencies. The
 goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
@@ -38,7 +39,7 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [ ] add additional format support using other tools
     -   [ ] DJVU
     -   [ ] CBR
-    -   [ ] DOCX 
+    -   [ ] DOCX
     -   [ ] ODT
     -   [ ] PPTX
     -   [ ] formats from which pandoc can generate html?
@@ -62,9 +63,9 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [ ] OCR
 -   [ ] Extract document doi/isbn
     -   [ ] and add to metadata
-    -   [ ] and pass to external command for fetching reference data 
+    -   [ ] and pass to external command for fetching reference data
 
-## Navigation 
+## Navigation
 
 -   [x] vim-style navigation
     -   [x] next-page, prev-page (with counts)
@@ -73,7 +74,7 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
     -   [x] jump to beginning, end of document
 -   [x] navigate via table of contents
     -   [ ] outline folding support
--   [ ]  navigate with bookmarks
+-   [ ] navigate with bookmarks
 -   [ ] Thumbnail mode
     -   [ ] Navigation
     -   [ ] Deleting pages
@@ -85,9 +86,9 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 ## Image Manipulation
 
 -   [x] view document metadata
-    - [ ] edit metadata
+    -   [ ] edit metadata
 -   [x] page rotation
-    - [ ] persistent rotation
+    -   [ ] persistent rotation
 -   [x] toggle transparency
 -   [x] invert colors ("dark mode")
 -   [x] toggle tinted background
@@ -118,13 +119,9 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
     -   [ ] Insert annotation
     -   [ ] Splitting pages
 
-
 # Dependencies
 
-```
-pip install pymupdf
-pip install curses
-```
+    pip install pymupdf
+    pip install curses
 
-...and probably other stuff. 
-
+...and probably other stuff.

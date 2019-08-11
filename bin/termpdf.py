@@ -2,37 +2,31 @@
 # vim:fileencoding=utf-8
 """\
 Usage:
-    kitty-pdf example.pdf
+    termpdf.py example.pdf
 
 Options:
-    currently, no options
+    currently none
 
 Key Bindings:
     see the shortcuts at the beginning of the file
 """
 
-__version__ = "0.1"
+__version__ = "pre-alpha"
 __license__ = "MIT"
 __author__ = "David Sanson"
-__url__ = "https://github.com/dsanson/kitty-pdf"
+__url__ = "https://github.com/dsanson/termpdf.py"
 
 import array
 import curses
 import fcntl
 import fitz
 import os
-import re
-import signal
-import subprocess
 import sys
 import termios
-import tty
 import zlib
 from base64 import standard_b64encode
 from collections import namedtuple
-from io import TextIOWrapper, BytesIO
 from math import ceil
-from time import sleep, monotonic
 
 # Keyboard shortcuts
 GOTO_PAGE     = {ord("G")}
@@ -459,7 +453,6 @@ def viewer(doc):
     opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
    
     
-    #tty.setraw(sys.stdin)
     runs = 0
     while True:
 
