@@ -42,11 +42,14 @@ NEXT_PAGE     = {ord("j"), curses.KEY_DOWN, ord(" ")}
 PREV_PAGE     = {ord("k"), curses.KEY_UP}
 NEXT_CHAP     = {ord("l"), curses.KEY_RIGHT}
 PREV_CHAP     = {ord("h"), curses.KEY_LEFT}
+OPEN          = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
+SHOW_TOC      = {ord("t")}
+SHOW_META     = {ord("M")}
 ROTATE_CW     = {ord("r")}
 ROTATE_CCW    = {ord("R")}
 TOGGLE_ALPHA  = {ord("a")}
 TOGGLE_INVERT = {ord("i")}
-TOGGLE_TINT   = {ord("t")}
+TOGGLE_TINT   = {ord("T")}
 REFRESH       = {18, curses.KEY_RESIZE}            # CTRL-R
 QUIT          = {3, ord("q")}
 DEBUG         = {ord("D")}
@@ -114,10 +117,12 @@ def write_chunked(cmd, data):
         write_gr_cmd(cmd, chunk)
         cmd.clear()
 
+# move the cursor to coordinates c,r
 def set_cursor(x_place, y_place):
     sys.stdout.buffer.write('\033[{};{}f'.format(y_place, x_place).encode('ascii'))
 
 def set_image_cursor(display_width, display_height, ss_width, ss_height):
+    screen_size = screen_size_function()
     x_place_pixels = (ss_width / 2) - (display_width / 2)
     x_place = int(ceil(x_place_pixels / screen_size().cell_width) - 1)
     x_place = max(0,x_place)
@@ -126,45 +131,70 @@ def set_image_cursor(display_width, display_height, ss_width, ss_height):
     y_place = max(0,y_place)
     set_cursor(x_place, y_place)
 
+# place a string at coordinates c,r
+def place_string(c,r,string):
+    set_cursor(c,r)
+    sys.stdout.write(string)
+    sys.stdout.flush()
+
 def clear_screen():
     sys.stdout.buffer.write('\033[2J'.encode('ascii'))
-    #subprocess.run('clear')
-    #cmd = {'a': 'd', 'd': 'Z', 'z': ZINDEX} 
-    #write_gr_cmd(cmd)
+    # subprocess.run('clear')
+    # using the key code seems to work the best of the options.
 
 def clear_page(n):
+    # this does not delete the page from kitty's memory;
+    # it just removes it from the display.
     cmd = {'a': 'd', 'i': n + 1}
     write_gr_cmd(cmd)
 
 def display_page(doc, n, opts):
     global is_stale
     page = doc.loadPage(n)
+
+    screen_size = screen_size_function()
+    ss_width = screen_size().width
+    ss_height = (screen_size().height - screen_size().cell_height)
+
+    # if the image is going to be rotated, swap width and height
     if opts["rotation"] == 0 or opts["rotation"] == 180:
         page_width = page.bound().width
         page_height = page.bound().height
     else:
         page_width = page.bound().height
         page_height = page.bound().width
-    screen_size = screen_size_function()
-    ss_width = screen_size().width
-    ss_height = (screen_size().height - screen_size().cell_height)
+    
+    # calculate the proper zoom factor
     x_factor = ss_width / page_width
     y_factor = ss_height / page_height
     factor = min(x_factor, y_factor)
+
+    # calculate the dimensions of the zoomed image
     display_width = factor * page_width
     display_height = factor * page_height
+
+    # move the cursor to the proper location
     set_image_cursor(display_width, display_height, ss_width, ss_height)
+
+    # If the image is already in memory and not stale, display it.
+    # Otherwise, transfer it.
     cmd = {'a': 'p', 'i': n + 1, 'z': ZINDEX}
     if is_stale[n] or not write_gr_cmd_with_response(cmd):
-        x_zoom, y_zoom = factor, factor
-        mat = fitz.Matrix(x_zoom, y_zoom)
+        # Generate a matrix and use it to generate a Pixmap
+        mat = fitz.Matrix(factor, factor)
         mat = mat.preRotate(opts["rotation"])
         pix = page.getPixmap(matrix = mat, alpha=opts["alpha"])
+
+        # start building the command for transfering the image
         cmd = {'i': n + 1, 't': 'd', 's': pix.width, 'v': pix.height}
+        # if alpha transparency is enabled, the image is 32 bit RGBA,
+        # otherwise, 24 bit RGB.
         if opts["alpha"]:
             cmd['f'] = 32
         else:
             cmd['f'] = 24
+
+        # apply tint or color inversion?
         if opts["tint"]:
             tint = fitz.utils.getColor(TINT_COLOR)
             red = int(tint[0] * 256)
@@ -173,47 +203,61 @@ def display_page(doc, n, opts):
             pix.tintWith(red,blue,green)
         if opts["invert"]:
             pix.invertIRect()
+
+        # transfer the image
         write_chunked(cmd, pix.samples)
+
+        # display the image
         cmd = {'a': 'p', 'i': n + 1, 'z': ZINDEX}
-        write_gr_cmd_with_response(cmd)
-        is_stale[n] = False
+        if write_gr_cmd_with_response(cmd):
+            # the image is no longer stale!
+            is_stale[n] = False
+        else:
+            # silently fail
+            pass
 
 def clean_quit(stdscr, doc):
+    # delete all the images from kitty's memory
     cmd = {'a': 'd', 'd': 'Z', 'z': ZINDEX}
     write_gr_cmd(cmd)
+
+    # close curses
     stdscr.keypad(False)
     curses.echo()
     curses.curs_set(1)
     curses.endwin()
+    
+    # close the document
     doc.close()
+
     raise SystemExit()
 
-def resize_handler(signum, frame):
-    cmd = {'a': 'd', 'd': 'Z', 'z': ZINDEX}
-    write_gr_cmd(cmd)
-    screen_size = screen_size_function()
-    ss_width = screen_size().width
-    ss_height = screen_size().height
-    return
-
-def place_string(c,r,string):
-    set_cursor(c,r)
-    sys.stdout.write(string)
-    sys.stdout.flush()
-
-def update_status_bar(doc, n, cmd):
+def update_status_bar(doc, n, cmd, message):
+    # pages start from 1, not 0!
     p = str(n + 1)
     t = doc.pageCount
+
+    screen_size = screen_size_function()
     c = screen_size().cols
     r = screen_size().rows
-    left_bar = cmd + " " * 5
+
+    # echo the command, with some padding to clear old commands
+    left_bar = cmd + " " * 10
     place_string(1,r,left_bar)
+    # center bar for messages
+    center_bar = message
+    offset = ceil((c / 2) - (len(message) / 2)) - 1
+    place_string(offset,r,center_bar)
+    # [current page/total pages]
     right_bar = '     [{}/{}]'.format(p, t)
     offset = c - len(right_bar)
     place_string(offset,r,right_bar)
+    # move the cursor back to the left
     set_cursor(len(cmd) + 2,r)
     sys.stdout.flush()
 
+# This is a curses status bar, but it doesn't seem
+# to play nice with image drawing, so it isn't used.
 def update_status_bar_c(status_bar, doc, n, cmd):
     p = str(n + 1)
     t = doc.pageCount
@@ -225,6 +269,9 @@ def update_status_bar_c(status_bar, doc, n, cmd):
     status_bar.addstr(0,offset,right_bar)
     status_bar.refresh()
 
+# Whenever we resize or tint or rotate or whatever,
+# we mark all the pages as stale, so that we know
+# to regenerate them.
 def mark_all_pages_as_stale(pages):
     global is_stale
     is_stale = [True] * (pages + 1)
@@ -261,29 +308,135 @@ def goto_page(doc, current, target, opts):
     pages = doc.pageCount - 1
     if target > pages:
         target = pages
-    elif target <= 0:
+    elif target < 0:
         target = 0
     return target
 
-# Works in progress
-
+# TODO: Searching
 def search_page(doc, current, search):
     results = doc.searchPageFor(current, search)
     clear_screen()
     print(results)
     raise SystemExit
 
-def show_toc(doc,n):
-    clear_screen()
-    clear_page(n)
-    toc = doc.getToC()
-    toc_text = ''
-    for sec in toc:
-        toc_text += '{}{}'.format(" " * sec[0], sec[1]) 
-    print(toc_text)
-    raise SystemExit
+def center_string(string, width):
+    return '{:^{width}}'.format(string, width=width)
 
-# Main Viewer
+def show_toc(doc,n):
+
+    toc = doc.getToC()
+
+    if not toc:
+        return n, "No ToC available."
+    else:
+        clear_page(n)
+
+        screen_size = screen_size_function()
+        cols = screen_size().cols
+        rows = screen_size().rows
+
+        hi, wi = rows - 6, min(cols - 4, 80)
+        Y, X = 2, ceil((cols / 2) - (wi / 2))
+        toc_win = curses.newwin(hi, wi, Y, X)
+        toc_win.box()
+        toc_win.keypad(True)
+        toc_win.addstr(1,2, center_string('Table of Contents', wi - 4))
+        toc_win.addstr(2,2, center_string('-----------------', wi - 4))
+        toc_win.refresh()
+
+        def get_current_chapter(toc, n):
+            for i, ch in enumerate(toc):
+                ch_page = ch[2] - 1
+                if ch_page > n:
+                    return i - 1
+        current_chapter = get_current_chapter(toc, n)
+
+        toc_pad = curses.newpad(len(toc), 200)
+        toc_pad.keypad(True)
+
+        span = []
+        for i, ch in enumerate(toc):
+            toc_text = '{}{}'.format("  " * ch[0], ch[1])
+            toc_pad.addstr(i,0,toc_text)
+            span.append(len(toc_text))
+      
+        index = current_chapter
+        while True:
+            for i, ch in enumerate(toc):
+                att = curses.A_REVERSE if index == i else curses.A_NORMAL
+                toc_pad.chgat(i, 0, span[index], att)
+            toc_pad.refresh(1, 0, Y + 3, X + 2, hi - 2, wi - 2)
+            key = toc_pad.getch()
+            if key in QUIT:
+                clear_screen()
+                return n
+            if key in NEXT_PAGE:
+                index = min(len(toc) - 1, index + 1)
+            if key in PREV_PAGE:
+                index = max(0, index - 1)
+            if key in OPEN:
+                clear_screen()
+                return toc[index][2] - 1
+
+def show_metadata(doc,n):
+    clear_page(n)
+
+    screen_size = screen_size_function()
+    cols = screen_size().cols
+    rows = screen_size().rows
+
+    hi, wi = rows - 6, min(cols - 4, 80)
+    Y, X = 2, ceil((cols / 2) - (wi / 2))
+    meta_win = curses.newwin(hi, wi, Y, X)
+    meta_win.box()
+    meta_win.keypad(True)
+    meta_win.addstr(1,2, center_string('Metadata', wi - 4))
+    meta_win.addstr(2,2, center_string('--------', wi - 4))
+    meta_win.refresh()
+    
+    metadata = doc.metadata
+
+    meta_pad = curses.newpad(len(metadata), 200)
+    meta_pad.keypad(True)
+
+    span = []
+    for i,key in enumerate(metadata):
+        str = '{}: {}'.format(key, metadata[key])
+        meta_pad.addstr(i,0,str)
+        span.append(len(str))
+  
+    index = 1
+    while True:
+        for i, k in enumerate(metadata):
+            att = curses.A_REVERSE if index == i else curses.A_NORMAL
+            meta_pad.chgat(i, 0, span[index], att)
+        meta_pad.refresh(1, 0, Y + 3, X + 2, hi - 2, wi - 2)
+        key = meta_pad.getch()
+        if key in QUIT:
+            clear_screen()
+            return
+        if key in NEXT_PAGE:
+            index = min(len(metadata) - 1, index + 1)
+        if key in PREV_PAGE:
+            index = max(0, index - 1)
+        if key in OPEN:
+            #TODO: edit fields
+            pass
+
+    meta_win.getch()
+    clear_screen()
+    return
+
+# TODO: Annotations
+# TODO: Bookmarks
+# TODO: Open links
+# TODO: Fill in Forms
+# TODO: Keyboard Visual Mode
+# TODO: Mouse Mode
+# TODO: Thumbnail Mode
+# TODO: OCR
+
+
 def viewer(doc):
 
     stdscr = curses.initscr()
@@ -295,7 +448,6 @@ def viewer(doc):
     stdscr.nodelay(True)
     stdscr.getch()
     
-    # r, c = stdscr.getmaxyx()
     # status_bar = curses.newwin(0,c - 1,r - 1,1)
 
     pages = doc.pageCount - 1
@@ -304,6 +456,7 @@ def viewer(doc):
     m = -1
     stack = [0] 
     count_string = ""
+    message = ""
     opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
    
     
@@ -320,10 +473,11 @@ def viewer(doc):
             stdscr.nodelay(False)
 
         # only update when changed page or image is stale
-        if m != n or is_stale[n]: 
+        if m != n or is_stale[n]:
             display_page(doc, n, opts)
-            update_status_bar(doc, n, str(runs))
-
+            update_status_bar(doc, n,"", message)
+        
+        # if these diverge, we are changing pages
         m = n
 
         # set count based on count_string
@@ -337,18 +491,19 @@ def viewer(doc):
 
         # echo char to status_bar and clobber escape codes
         if char == 27: # ESC
-            update_status_bar(doc, n, "")
+            update_status_bar(doc, n, "", message)
         elif stack[0] == 27 and chr(char) == "_": # clobber ESC code
-            update_status_bar(doc, n, '<STUCK> Press ESC\\ to resume.')
+            message = 'STUCK: Press ESC\\ to resume.'
+            update_status_bar(doc, n, "", message)
             r = b''
             while r[-2:] != b'\033\\':
                 r += sys.stdin.buffer.read(1)
-            update_status_bar(doc, n, '                        ')
+            update_status_bar(doc, n, '', ' ' * len(message))
+            message = ""
             count_string = "" 
             stack = [0] 
         elif 32 < char < 256: # printable characters
-            update_status_bar(doc, n, count_string + chr(char)) # echo input
-
+            update_status_bar(doc, n, count_string + chr(char), message) # echo input
 
         # perform actions based on character commands
         if char == -1:
@@ -404,12 +559,20 @@ def viewer(doc):
                 opts["tint"] = not opts["tint"]
                 mark_all_pages_as_stale(pages)
                 stack = [0] 
+            elif char in SHOW_TOC:
+                target, message = show_toc(doc, n)
+                n = goto_page(doc, n, target, opts)
+                is_stale[m] = True
+                stack = [0] 
+            elif char in SHOW_META:
+                show_metadata(doc, n) 
+                is_stale[m] = True
+                stack = [0] 
             elif char in REFRESH: # Ctrl-R
                 mark_all_pages_as_stale(pages)
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
-                show_toc(doc,n)
                 # pass
                 stack = [0] 
             else:
@@ -419,11 +582,9 @@ def viewer(doc):
                 clear_page(m)
             count_string = ""
 
-
 def main(args=sys.argv):
     global is_stale
     is_stale = []
-    global screen_size
     screen_size = screen_size_function()
     if screen_size().width == 0:
         raise SystemExit(
