@@ -40,14 +40,20 @@ goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 
 ## Commands and Interaction
 
+-   [ ] support command line arguments
+    -   [ ] --help
+    -   [ ] --version
+    -   [ ] --page-number
+-   [ ] open to last-viewed page
 -   [ ] vim-style ex-mode
 -   [ ] configuration file
 -   [ ] Open multiple documents at once ("buffers")
     -   [ ] synced plain text buffer
 -   [ ] Remote control from other apps
     -   [ ] SyncTeX support
+    -   [ ] jump to page, chapter, annotation, bookmark
+    -   [ ] Note-taking integration ala org-noter
 -   [ ] OCR
--   [ ] Note-taking integration ala org-noter
 -   [ ] Extract document doi/isbn
     -   [ ] and add to metadata
     -   [ ] and pass to external command for fetching reference data 
@@ -75,6 +81,7 @@ goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 -   [x] view document metadata
     - [ ] edit metadata
 -   [x] page rotation
+    - [ ] persistent rotation
 -   [x] toggle transparency
 -   [x] invert colors ("dark mode")
 -   [x] toggle tinted background
@@ -113,5 +120,5 @@ pip install pymupdf
 pip install curses
 ```
 
-...and probably some other stuff. 
+...and probably other stuff. 
 
