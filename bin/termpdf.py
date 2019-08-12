@@ -2,19 +2,39 @@
 # vim:fileencoding=utf-8
 """\
 Usage:
-    termpdf.py example.pdf
+    termpdf.py [options] example.pdf
 
 Options:
-    currently none
-
-Key Bindings:
-    see the shortcuts at the beginning of the file
+    -n n, --page-number n
+    -v, --version
+    -h, --help
 """
 
 __version__ = "pre-alpha"
 __license__ = "MIT"
 __author__ = "David Sanson"
 __url__ = "https://github.com/dsanson/termpdf.py"
+
+__viewer_shortcuts__ = """\
+Shortcuts:
+    j, down, space: forward [count] pages
+    k, up:          back [count] pages
+    l, right:       forward [count] sections
+    h, left:        back [count] sections
+    gg:             go to beginning of document
+    G:              go to end of document
+    [count]G:       go to page [count]
+    t:              display table of contents 
+    M:              display metadata
+    T:              toggle text mode
+    r:              rotate [count] quarter turns clockwise
+    R:              rotate [count] quarter turns counterclockwise
+    a:              toggle alpha transparency
+    i:              invert colors
+    d:              darken using TINT_COLOR
+    ctrl-r:         refresh
+    q:              quit
+"""
 
 import array
 import curses
@@ -548,7 +568,7 @@ def text_viewer(stdscr,doc,n):
                 count_string = ""
 
 
-def viewer(doc):
+def viewer(doc, n=0):
 
     stdscr = curses.initscr()
     stdscr.clear()
@@ -562,8 +582,12 @@ def viewer(doc):
     # status_bar = curses.newwin(0,c - 1,r - 1,1)
 
     pages = doc.pageCount - 1
+
+    # if n is negative, then open n pages from the end of the doc
+    if n < 0:
+        n = max(pages + n, 0)
+
     mark_all_pages_as_stale(pages)
-    n = 0
     m = -1
     stack = [0] 
     count_string = ""
@@ -577,6 +601,7 @@ def viewer(doc):
         # reload the after the first time, since getch seems to clobber
         # the image the first time around.
         if runs < 1:
+            print(n)
             is_stale[n]
             runs = runs + 1
         else:
@@ -695,23 +720,63 @@ def viewer(doc):
                 clear_page(m)
             count_string = ""
 
+def parse_args(args):
+    if len({"-h", "--help"} & set(args)) != 0:
+        hlp = __doc__.rstrip()
+        print(hlp)
+        print()
+        print(__viewer_shortcuts__)
+        raise SystemExit()
+    if len({"-v", "--version", "-V"} & set(args)) != 0:
+        print(__version__)
+        print(__license__, "License")
+        print("Copyright (c) 2019", __author__)
+        print(__url__)
+        raise SystemExit()
+
+    n = 0 # open first page by default
+
+    items = []
+    skip = False
+    for i,arg in enumerate(args):
+        if skip:
+            skip = not skip
+        elif arg in {'-n', '--page-number'}:
+            try:
+                n = int(args[i + 1])
+                n = n - 1 # page indexing starts at 0
+                skip = True
+            except:
+                print(args)
+                raise SystemExit('no page number specified')
+        else:
+            items = items + [arg]
+
+    if len(items) > 1:
+        print("Warning: only opening the first file...")
+                
+    return items[0], n
+
+
 def main(args=sys.argv):
     global is_stale
     is_stale = []
+
+    item, n = parse_args(args[1:])
+
+
     screen_size = screen_size_function()
     if screen_size().width == 0:
         raise SystemExit(
             'Terminal does not support reporting screen sizes via the TIOCGWINSZ ioctl'
         )
-    if len(args) != 2:
-        raise SystemExit('You must specify exactly one file to view.')
 
     try:
-        doc = fitz.open(args[1])
+        doc = fitz.open(item)
     except:
         raise SystemExit('Unable to open "{}".'.format(item))
 
-    viewer(doc)
+    viewer(doc, n)
 
 if __name__ == '__main__':
     main()

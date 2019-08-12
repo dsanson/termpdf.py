@@ -48,9 +48,9 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 ## Commands and Interaction
 
 -   [ ] support command line arguments
-    -   [ ] --help
-    -   [ ] --version
-    -   [ ] --page-number
+    -   [x] --help
+    -   [x] --version
+    -   [x] --page-number
 -   [ ] open to last-viewed page
 -   [ ] vim-style ex-mode
 -   [ ] configuration file
