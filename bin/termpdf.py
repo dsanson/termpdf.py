@@ -362,14 +362,14 @@ def show_toc(doc,n):
             key = toc_pad.getch()
             if key in QUIT:
                 clear_screen()
-                return n
+                return n, ""
             if key in NEXT_PAGE:
                 index = min(len(toc) - 1, index + 1)
             if key in PREV_PAGE:
                 index = max(0, index - 1)
             if key in OPEN:
                 clear_screen()
-                return toc[index][2] - 1
+                return toc[index][2] - 1, ""
 
 def show_metadata(doc,n):
     clear_page(n)
