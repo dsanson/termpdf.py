@@ -57,6 +57,7 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [ ] Open multiple documents at once ("buffers")
     -   [ ] synced plain text buffer
 -   [ ] Remote control from other apps
+    -   [ ] msgpack-rpc for interaction with nvim
     -   [ ] SyncTeX support
     -   [ ] jump to page, chapter, annotation, bookmark
     -   [ ] Note-taking integration ala org-noter
