@@ -55,7 +55,6 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [ ] vim-style ex-mode
 -   [ ] configuration file
 -   [ ] Open multiple documents at once ("buffers")
-    -   [ ] synced plain text buffer
 -   [ ] Remote control from other apps
     -   [ ] SyncTeX support
     -   [ ] jump to page, chapter, annotation, bookmark
@@ -102,8 +101,12 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [ ] Fill out forms
     -   [ ] Document signing?
 
-## Visual and Mouse modes
+## Text, Visual and Mouse modes
 
+-   [ ] Text mode
+    -   [x] basic implementation
+    -   [ ] with pretty printing
+    -   [ ] with visual and mouse modes
 -   [ ] Keyboard visual mode
     -   [ ] Select by word
     -   [ ] Select by rectangle

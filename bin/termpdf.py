@@ -29,23 +29,24 @@ from collections import namedtuple
 from math import ceil
 
 # Keyboard shortcuts
-GOTO_PAGE     = {ord("G")}
-GOTO          = {ord("g")}
-NEXT_PAGE     = {ord("j"), curses.KEY_DOWN, ord(" ")}
-PREV_PAGE     = {ord("k"), curses.KEY_UP}
-NEXT_CHAP     = {ord("l"), curses.KEY_RIGHT}
-PREV_CHAP     = {ord("h"), curses.KEY_LEFT}
-OPEN          = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
-SHOW_TOC      = {ord("t")}
-SHOW_META     = {ord("M")}
-ROTATE_CW     = {ord("r")}
-ROTATE_CCW    = {ord("R")}
-TOGGLE_ALPHA  = {ord("a")}
-TOGGLE_INVERT = {ord("i")}
-TOGGLE_TINT   = {ord("T")}
-REFRESH       = {18, curses.KEY_RESIZE}            # CTRL-R
-QUIT          = {3, ord("q")}
-DEBUG         = {ord("D")}
+GOTO_PAGE        = {ord("G")}
+GOTO             = {ord("g")}
+NEXT_PAGE        = {ord("j"), curses.KEY_DOWN, ord(" ")}
+PREV_PAGE        = {ord("k"), curses.KEY_UP}
+NEXT_CHAP        = {ord("l"), curses.KEY_RIGHT}
+PREV_CHAP        = {ord("h"), curses.KEY_LEFT}
+OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
+SHOW_TOC         = {ord("t")}
+SHOW_META        = {ord("M")}
+TOGGLE_TEXT_MODE = {ord("T")}
+ROTATE_CW        = {ord("r")}
+ROTATE_CCW       = {ord("R")}
+TOGGLE_ALPHA     = {ord("a")}
+TOGGLE_INVERT    = {ord("i")}
+TOGGLE_TINT      = {ord("d")}
+REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
+QUIT             = {3, ord("q")}
+DEBUG            = {ord("D")}
 
 # Defaults
 TINT_COLOR    = "antiquewhite2"
@@ -251,16 +252,16 @@ def update_status_bar(doc, n, cmd, message):
 
 # This is a curses status bar, but it doesn't seem
 # to play nice with image drawing, so it isn't used.
-def update_status_bar_c(status_bar, doc, n, cmd):
+def update_status_bar_c(status_bar, doc, n, cmd, message):
     p = str(n + 1)
     t = doc.pageCount
     r, c = status_bar.getmaxyx()
-    left_bar = cmd + " " * 5
+    left_bar = cmd + " " * 10 
     status_bar.addstr(0,5,left_bar)
     right_bar = '     [{}/{}]'.format(p, t)
-    offset = (c - 10) - len(right_bar)
+    offset = c - len(right_bar)
     status_bar.addstr(0,offset,right_bar)
-    status_bar.refresh()
+    return status_bar
 
 # Whenever we resize or tint or rotate or whatever,
 # we mark all the pages as stale, so that we know
@@ -297,7 +298,7 @@ def prev_chapter(doc, n, count=1):
     else:
         return n
 
-def goto_page(doc, current, target, opts):
+def goto_page(doc, target):
     pages = doc.pageCount - 1
     if target > pages:
         target = pages
@@ -315,7 +316,7 @@ def search_page(doc, current, search):
 def center_string(string, width):
     return '{:^{width}}'.format(string, width=width)
 
-def show_toc(doc,n):
+def show_toc(stdscr,doc,n):
 
     toc = doc.getToC()
 
@@ -336,6 +337,9 @@ def show_toc(doc,n):
         toc_win.keypad(True)
         toc_win.addstr(1,2, center_string('Table of Contents', wi - 4))
         toc_win.addstr(2,2, center_string('-----------------', wi - 4))
+
+        stdscr.clear()
+        stdscr.refresh()
         toc_win.refresh()
 
         def get_current_chapter(toc, n):
@@ -372,9 +376,8 @@ def show_toc(doc,n):
                 clear_screen()
                 return toc[index][2] - 1, ""
 
-def show_metadata(doc,n):
+def show_metadata(stdscr,doc,n):
     clear_page(n)
-    clear_screen()
 
     screen_size = screen_size_function()
     cols = screen_size().cols
@@ -387,6 +390,9 @@ def show_metadata(doc,n):
     meta_win.keypad(True)
     meta_win.addstr(1,2, center_string('Metadata', wi - 4))
     meta_win.addstr(2,2, center_string('--------', wi - 4))
+
+    stdscr.clear()
+    stdscr.refresh()
     meta_win.refresh()
     
     metadata = doc.metadata
@@ -418,10 +424,6 @@ def show_metadata(doc,n):
             #TODO: edit fields
             pass
 
-    meta_win.getch()
-    clear_screen()
-    return
-
 # TODO: Annotations
 # TODO: Bookmarks
 # TODO: Open links
@@ -431,12 +433,119 @@ def show_metadata(doc,n):
 # TODO: Thumbnail Mode
 # TODO: OCR
 
-def display_as_text(doc,n):
-    clear_page(n)
-    page_text = doc.getPageText(n,"text")
-    print(page_text)
-    sys.stdin.read(1)
+def text_viewer(stdscr,doc,n):
 
+    from textwrap import wrap 
+    clear_page(n)
+
+    screen_size = screen_size_function()
+    cols = screen_size().cols
+    rows = screen_size().rows
+
+    width = min(80, cols - 2)
+    height = rows - 2
+    x_offset = ceil((cols / 2) - (width / 2))
+    y_offset = 0
+
+    pages = doc.pageCount - 1
+
+    while True:
+        page_text = doc.getPageText(n,"text")
+        page_text = wrap(page_text,width)
+
+        text_pad = curses.newpad(len(page_text), width)
+        text_pad.keypad(True)
+        
+        for i,line in enumerate(page_text):
+            text_pad.addstr(i,0,line)
+        
+        last = int(len(page_text) / height)
+       
+
+        message = ""
+        key = 0 
+        stack = [0]
+        count_string = ""
+        index = 0
+        change_page = False
+        while not change_page:
+            stdscr.clear()
+            stdscr.refresh()
+            text_pad.refresh(index * height, 0, y_offset, x_offset, y_offset + height, x_offset + width)
+            #update_status_bar(doc, n, count_string + chr(key), message) # echo input
+            # set count based on count_string
+            if count_string == "":
+                count = 1
+            else:
+                count = int(count_string)
+
+            key = text_pad.getch()
+
+            if key == 27: # ESC
+                update_status_bar(doc, n, "", message)
+            elif 32 < key < 256: # printable characters
+                update_status_bar(doc, n, count_string + chr(key), message) # echo input
+
+            # perform actions based on keyacter commands
+            if key == -1:
+                pass
+            if key in range(48, 57): # increment count_string
+                count_string = count_string + chr(key)
+            else:
+                if key in QUIT:
+                    clean_quit(stdscr, doc)
+                if key in TOGGLE_TEXT_MODE:
+                    clear_screen()
+                    return n
+                elif key in GOTO_PAGE:
+                    if count_string != "":
+                       target = count - 1
+                    else: 
+                       target = pages
+                    n = goto_page(doc, target)
+                    change_page = True
+                    stack = [0]
+                    stack = [0] 
+                elif key in NEXT_PAGE:
+                    index += 1
+                    if index > last:
+                        target = n + 1
+                        n = goto_page(doc, target)
+                        change_page = True
+                    stack = [0]
+                elif key in PREV_PAGE:
+                    index -= 1
+                    if index < 0:
+                        target = n - 1
+                        n = goto_page(doc, target)
+                        change_page = True
+                    stack = [0]
+                    stack = [0]
+                elif key in NEXT_CHAP:
+                    target = next_chapter(doc, n, count)
+                    n = goto_page(doc, target)
+                    change_page = True
+                    stack = [0] 
+                elif key in PREV_CHAP:
+                    target = prev_chapter(doc, n, count)
+                    n = goto_page(doc, target)
+                    change_page = True
+                    stack = [0] 
+                elif stack[0] in GOTO and key in GOTO:
+                    n = goto_page(doc, 0)
+                    change_page = True
+                    stack = [0] 
+                elif key in SHOW_TOC:
+                    target, message = show_toc(stdscr,doc, n)
+                    n = goto_page(doc, target)
+                    change_page = True
+                    stack = [0] 
+                elif key in SHOW_META:
+                    show_metadata(stdscr,doc, n) 
+                    stack = [0] 
+                else:
+                    stack = [key] + stack
+                count_string = ""
 
 
 def viewer(doc):
@@ -519,26 +628,26 @@ def viewer(doc):
                    target = count - 1
                 else: 
                    target = pages
-                n = goto_page(doc, n, target, opts)
+                n = goto_page(doc, target)
                 stack = [0] 
             elif char in NEXT_PAGE:
                 target = n + count
-                n = goto_page(doc, n, target, opts)
+                n = goto_page(doc, target)
                 stack = [0] 
             elif char in PREV_PAGE:
                 target = n - count
-                n = goto_page(doc, n, target, opts)
+                n = goto_page(doc, target)
                 stack = [0] 
             elif char in NEXT_CHAP:
                 target = next_chapter(doc, n, count)
-                n = goto_page(doc, n, target, opts)
+                n = goto_page(doc, target)
                 stack = [0] 
             elif char in PREV_CHAP:
                 target = prev_chapter(doc, n, count)
-                n = goto_page(doc, n, target, opts)
+                n = goto_page(doc, target)
                 stack = [0] 
             elif stack[0] in GOTO and char in GOTO:
-                n = goto_page(doc, n, 0, opts)
+                n = goto_page(doc, 0)
                 stack = [0] 
             elif char in ROTATE_CW:
                 opts["rotation"] = (opts["rotation"] + 90 * count) % 360
@@ -561,12 +670,16 @@ def viewer(doc):
                 mark_all_pages_as_stale(pages)
                 stack = [0] 
             elif char in SHOW_TOC:
-                target, message = show_toc(doc, n)
-                n = goto_page(doc, n, target, opts)
+                target, message = show_toc(stdscr,doc, n)
+                n = goto_page(doc, target)
                 is_stale[m] = True
                 stack = [0] 
             elif char in SHOW_META:
-                show_metadata(doc, n) 
+                show_metadata(stdscr,doc, n) 
+                is_stale[m] = True
+                stack = [0] 
+            elif char in TOGGLE_TEXT_MODE:
+                n = text_viewer(stdscr,doc,n)
                 is_stale[m] = True
                 stack = [0] 
             elif char in REFRESH: # Ctrl-R
@@ -574,9 +687,7 @@ def viewer(doc):
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
-                # pass
-                display_as_text(doc,n)
-                stack = [0] 
+                pass
             else:
                 stack = [char] + stack
             
