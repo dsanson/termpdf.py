@@ -138,7 +138,7 @@ def clear_screen():
 def clear_page(n):
     # this does not delete the page from kitty's memory;
     # it just removes it from the display.
-    cmd = {'a': 'd', 'i': n + 1}
+    cmd = {'a': 'd', 'd': 'a', 'i': n + 1}
     write_gr_cmd(cmd)
 
 def display_page(doc, n, opts):
@@ -323,6 +323,7 @@ def show_toc(doc,n):
         return n, "No ToC available."
     else:
         clear_page(n)
+        clear_screen()
 
         screen_size = screen_size_function()
         cols = screen_size().cols
@@ -357,7 +358,7 @@ def show_toc(doc,n):
         while True:
             for i, ch in enumerate(toc):
                 att = curses.A_REVERSE if index == i else curses.A_NORMAL
-                toc_pad.chgat(i, 0, span[index], att)
+                toc_pad.chgat(i, 0, span[i], att)
             toc_pad.refresh(1, 0, Y + 3, X + 2, hi - 2, wi - 2)
             key = toc_pad.getch()
             if key in QUIT:
@@ -373,6 +374,7 @@ def show_toc(doc,n):
 
 def show_metadata(doc,n):
     clear_page(n)
+    clear_screen()
 
     screen_size = screen_size_function()
     cols = screen_size().cols
@@ -402,7 +404,7 @@ def show_metadata(doc,n):
     while True:
         for i, k in enumerate(metadata):
             att = curses.A_REVERSE if index == i else curses.A_NORMAL
-            meta_pad.chgat(i, 0, span[index], att)
+            meta_pad.chgat(i, 0, span[i], att)
         meta_pad.refresh(1, 0, Y + 3, X + 2, hi - 2, wi - 2)
         key = meta_pad.getch()
         if key in QUIT:
@@ -428,6 +430,13 @@ def show_metadata(doc,n):
 # TODO: Mouse Mode
 # TODO: Thumbnail Mode
 # TODO: OCR
+
+def display_as_text(doc,n):
+    clear_page(n)
+    page_text = doc.getPageText(n,"text")
+    print(page_text)
+    sys.stdin.read(1)
+
 
 
 def viewer(doc):
@@ -566,6 +575,7 @@ def viewer(doc):
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
                 # pass
+                display_as_text(doc,n)
                 stack = [0] 
             else:
                 stack = [char] + stack
