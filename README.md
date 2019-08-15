@@ -102,7 +102,8 @@ Or copy it somewhere in your path.
     -   [ ] Adding pages
     -   [ ] Moving pages within document
     -   [ ] Creating new document from selected pages
--   [ ] Follow/fetch links in document
+-   [x] Follow/fetch urls on page
+-   [ ] Follow urls and crossrefs on page via hints mode
 
 ## Image Manipulation
 

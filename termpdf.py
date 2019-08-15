@@ -26,6 +26,7 @@ Shortcuts:
     [count]G:       go to page [count]
     t:              display table of contents 
     M:              display metadata
+    u:              display URLs
     T:              toggle text mode
     r:              rotate [count] quarter turns clockwise
     R:              rotate [count] quarter turns counterclockwise
@@ -43,7 +44,9 @@ import fitz
 import os
 import sys
 import termios
+import subprocess
 import zlib
+import shutil
 from base64 import standard_b64encode
 from collections import namedtuple
 from math import ceil
@@ -58,6 +61,7 @@ PREV_CHAP        = {ord("h"), curses.KEY_LEFT}
 OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
 SHOW_TOC         = {ord("t")}
 SHOW_META        = {ord("M")}
+SHOW_URLS        = {ord("u")}
 TOGGLE_TEXT_MODE = {ord("T")}
 ROTATE_CW        = {ord("r")}
 ROTATE_CCW       = {ord("R")}
@@ -71,6 +75,28 @@ DEBUG            = {ord("D")}
 # Defaults
 TINT_COLOR    = "antiquewhite2"
 ZINDEX        = -1
+
+URL_BROWSER_LIST = [
+    "gnome-open",
+    "gvfs-open",
+    "xdg-open",
+    "kde-open",
+    "firefox",
+    "w3m",
+    "elinks",
+    "lynx"
+]
+
+URL_BROWSER = None
+if sys.platform == "win32":
+    URL_BROWSER = "start"
+elif sys.platform == "darwin":
+    URL_BROWSER = "open"
+else:
+    for i in VWR_LIST:
+        if shutil.which(i) is not None:
+            VWR = i
+            break
 
 def screen_size_function(fd=None):
     # ans = getattr(screen_size_function, 'ans', None)
@@ -343,6 +369,7 @@ def show_toc(stdscr,doc,n):
     if not toc:
         return n, "No ToC available."
     else:
+        is_stale[n] = True
         clear_page(n)
         clear_screen()
 
@@ -355,8 +382,9 @@ def show_toc(stdscr,doc,n):
         toc_win = curses.newwin(hi, wi, Y, X)
         toc_win.box()
         toc_win.keypad(True)
-        toc_win.addstr(1,2, center_string('Table of Contents', wi - 4))
-        toc_win.addstr(2,2, center_string('-----------------', wi - 4))
+        header = 'Table of Contents'
+        toc_win.addstr(1,2, center_string(header, wi - 4))
+        toc_win.addstr(2,2, center_string('-' * len(header), wi - 4))
 
         stdscr.clear()
         stdscr.refresh()
@@ -397,52 +425,124 @@ def show_toc(stdscr,doc,n):
                 return toc[index][2] - 1, ""
 
 def show_metadata(stdscr,doc,n):
-    clear_page(n)
 
-    screen_size = screen_size_function()
-    cols = screen_size().cols
-    rows = screen_size().rows
-
-    hi, wi = rows - 6, min(cols - 4, 80)
-    Y, X = 2, ceil((cols / 2) - (wi / 2))
-    meta_win = curses.newwin(hi, wi, Y, X)
-    meta_win.box()
-    meta_win.keypad(True)
-    meta_win.addstr(1,2, center_string('Metadata', wi - 4))
-    meta_win.addstr(2,2, center_string('--------', wi - 4))
-
-    stdscr.clear()
-    stdscr.refresh()
-    meta_win.refresh()
-    
     metadata = doc.metadata
+    
+    if len(metadata) == 0: 
+        return n, "No Metadata available."
+    else:
+        is_stale[n] = True
+        clear_page(n)
 
-    meta_pad = curses.newpad(len(metadata), 200)
-    meta_pad.keypad(True)
+        screen_size = screen_size_function()
+        cols = screen_size().cols
+        rows = screen_size().rows
 
-    span = []
-    for i,key in enumerate(metadata):
-        str = '{}: {}'.format(key, metadata[key])
-        meta_pad.addstr(i,0,str)
-        span.append(len(str))
-  
-    index = 1
-    while True:
-        for i, k in enumerate(metadata):
-            att = curses.A_REVERSE if index == i else curses.A_NORMAL
-            meta_pad.chgat(i, 0, span[i], att)
-        meta_pad.refresh(1, 0, Y + 3, X + 2, hi - 2, wi - 2)
-        key = meta_pad.getch()
-        if key in QUIT:
-            clear_screen()
-            return
-        if key in NEXT_PAGE:
-            index = min(len(metadata) - 1, index + 1)
-        if key in PREV_PAGE:
-            index = max(0, index - 1)
-        if key in OPEN:
-            #TODO: edit fields
-            pass
+        hi, wi = rows - 6, min(cols - 4, 80)
+        Y, X = 2, ceil((cols / 2) - (wi / 2))
+        meta_win = curses.newwin(hi, wi, Y, X)
+        meta_win.box()
+        meta_win.keypad(True)
+        header = 'Metadata'
+        meta_win.addstr(1,2, center_string(header, wi - 4))
+        meta_win.addstr(2,2, center_string('-' * len(header), wi - 4))
+
+        stdscr.clear()
+        stdscr.refresh()
+        meta_win.refresh()
+        
+
+        meta_pad = curses.newpad(len(metadata), 200)
+        meta_pad.keypad(True)
+
+        span = []
+        for i,key in enumerate(metadata):
+            str = '{}: {}'.format(key, metadata[key])
+            meta_pad.addstr(i,0,str)
+            span.append(len(str))
+      
+        index = 1
+        while True:
+            for i, k in enumerate(metadata):
+                att = curses.A_REVERSE if index == i else curses.A_NORMAL
+                meta_pad.chgat(i, 0, span[i], att)
+            meta_pad.refresh(0, 0, Y + 3, X + 2, hi - 2, wi - 2)
+            key = meta_pad.getch()
+            if key in QUIT:
+                clear_screen()
+                return
+            if key in NEXT_PAGE:
+                index = min(len(metadata) - 1, index + 1)
+            if key in PREV_PAGE:
+                index = max(0, index - 1)
+            if key in OPEN:
+                #TODO: edit fields
+                pass
+
+def show_urls(stdscr, doc, n):
+
+    page = doc.loadPage(n)
+    refs = page.getLinks()
+    urls = []
+    pad_width = 20
+    for ref in refs:
+        if ref['kind'] == 2:
+            u = ref['uri']
+            l = len(u)
+            urls = urls + [u]
+            pad_width = max(pad_width, l + 2)
+    if len(urls) == 0:
+        return "No URLs on page"
+    else:
+        is_stale[n] = True
+        clear_page(n)
+        clear_screen()
+
+        screen_size = screen_size_function()
+        cols = screen_size().cols
+        rows = screen_size().rows
+
+        hi, wi = rows - 6, min(cols - 4, 80)
+        Y, X = 2, ceil((cols / 2) - (wi / 2))
+        url_win = curses.newwin(hi, wi, Y, X)
+        url_win.box()
+        url_win.keypad(True)
+        header = 'URLs'
+        url_win.addstr(1,2, center_string(header, wi - 4))
+        url_win.addstr(2,2, center_string('-' * len(header), wi - 4))
+
+        stdscr.clear()
+        stdscr.refresh()
+        url_win.refresh()
+       
+        url_pad = curses.newpad(len(urls), pad_width)
+        url_pad.keypad(True)
+
+        span = []
+        for i, url in enumerate(urls):
+            url_pad.addstr(i,0,url)
+            span.append(len(url))
+         
+        index = 0
+        while True:
+            for i, url in enumerate(urls):
+                att = curses.A_REVERSE if index == i else curses.A_NORMAL
+                url_pad.chgat(i, 0, span[i], att)
+            url_pad.refresh(0, 0, Y + 3, X + 2, hi - 2, wi - 2)
+            key = url_pad.getch()
+            if key in QUIT:
+                clear_screen()
+                return ""
+            if key in NEXT_PAGE:
+                index = min(len(url) - 1, index + 1)
+            if key in PREV_PAGE:
+                index = max(0, index - 1)
+            if key in OPEN:
+                clear_screen()
+                subprocess.run([URL_BROWSER, urls[i]], check=True)
+                return ""
+
+
 
 # TODO: Annotations
 # TODO: Bookmarks
@@ -606,12 +706,17 @@ def viewer(doc, n=0):
         else:
             stdscr.nodelay(False)
 
-        # only update when changed page or image is stale
+        # only update image when changed page or image is stale
         if m != n or is_stale[n]:
             display_page(doc, n, opts)
+
+        # only update status bar when page or message changed    
+        if m != n or message != old_message:
             update_status_bar(doc, n,"", message)
-        # if these diverge, we are changing pages
+
+        # reset change tracking
         m = n
+        old_message = message
 
         # set count based on count_string
         if count_string == "":
@@ -695,12 +800,13 @@ def viewer(doc, n=0):
             elif char in SHOW_TOC:
                 target, message = show_toc(stdscr,doc, n)
                 n = goto_page(doc, target)
-                is_stale[m] = True
                 stack = [0] 
             elif char in SHOW_META:
                 show_metadata(stdscr,doc, n) 
-                is_stale[m] = True
                 stack = [0] 
+            elif char in SHOW_URLS:
+                message = show_urls(stdscr,doc,n)
+                stack = [0]
             elif char in TOGGLE_TEXT_MODE:
                 n = text_viewer(stdscr,doc,n)
                 is_stale[m] = True
