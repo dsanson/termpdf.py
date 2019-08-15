@@ -17,7 +17,7 @@ more powerful---but less portable---replacement for
 -   Less buggy because it won't be a lovable but ridiculous hack of a bash
     script wrapped around a bunch of command line tools.
 
-This is alpha version software. Expect bugs and undocumented dependencies. The
+This is pre-alpha software. Expect bugs and undocumented dependencies. The
 goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 
 # Screenshot
@@ -56,6 +56,7 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [ ] configuration file
 -   [ ] Open multiple documents at once ("buffers")
 -   [ ] Remote control from other apps
+    -   [ ] msgpack-rpc for interaction with nvim
     -   [ ] SyncTeX support
     -   [ ] jump to page, chapter, annotation, bookmark
     -   [ ] Note-taking integration ala org-noter
