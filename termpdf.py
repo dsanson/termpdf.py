@@ -578,7 +578,6 @@ def viewer(doc, n=0):
     #stdscr.timeout(-1)
     stdscr.nodelay(True)
     stdscr.getch()
-    
     # status_bar = curses.newwin(0,c - 1,r - 1,1)
 
     pages = doc.pageCount - 1
@@ -596,12 +595,12 @@ def viewer(doc, n=0):
    
     
     runs = 0
+
     while True:
 
         # reload the after the first time, since getch seems to clobber
         # the image the first time around.
         if runs < 1:
-            print(n)
             is_stale[n]
             runs = runs + 1
         else:
@@ -611,7 +610,6 @@ def viewer(doc, n=0):
         if m != n or is_stale[n]:
             display_page(doc, n, opts)
             update_status_bar(doc, n,"", message)
-        
         # if these diverge, we are changing pages
         m = n
 
