@@ -17,7 +17,7 @@ more powerful---but less portable---replacement for
 -   Less buggy because it won't be a lovable but ridiculous hack of a bash
     script wrapped around a bunch of command line tools.
 
-This is pre-alpha software. Expect bugs and undocumented dependencies. The
+This is alpha software. Expect bugs. Expect changes. The
 goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 
 # Screenshot
@@ -25,6 +25,27 @@ goal is feature parity with [pdf-tools](https://github.com/politza/pdf-tools).
 ![Screenshot](screenshot.png)
 
 Note the alpha transparency. You can toggle this on or off by pressing `a`.
+
+# Dependencies
+
+-   Python 3
+-   Kitty (unless other terminal emulators implement the same graphics protocol.)
+-   [PyMuPDF](https://pypi.org/project/PyMuPDF/)
+    -   PyMuPDF in turn depends on MuPDF. On OSX, `brew install mupdf-tools`.
+
+# Installation
+
+    git clone https://github.com/dsanson/termpdf.py
+    cd termpdf.py
+    pip install -r requirements.txt
+
+(You might need to use `pip3` if `pip` is Python 2 on your system.)
+
+Now you can run the script in place:
+
+    ./termpdf.py <file.pdf>
+
+Or copy it somewhere in your path.
 
 # Features
 
@@ -123,9 +144,5 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
     -   [ ] Insert annotation
     -   [ ] Splitting pages
 
-# Dependencies
 
-    pip install pymupdf
-    pip install curses
 
-...and probably other stuff.

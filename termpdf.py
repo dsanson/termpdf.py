@@ -10,7 +10,7 @@ Options:
     -h, --help
 """
 
-__version__ = "pre-alpha"
+__version__ = "0.1.0"
 __license__ = "MIT"
 __author__ = "David Sanson"
 __url__ = "https://github.com/dsanson/termpdf.py"
