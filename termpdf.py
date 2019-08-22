@@ -427,7 +427,7 @@ def show_toc(screen_size, stdscr,doc,n):
                 toc_pad.chgat(i, 0, span[i], att)
             toc_pad.refresh(1, 0, Y + 3, X + 2, hi - 2, wi - 2)
             key = toc_pad.getch()
-            if key in QUIT:
+            if key in QUIT or key in SHOW_TOC:
                 clear_screen()
                 return n, ""
             if key in NEXT_PAGE:
@@ -481,7 +481,7 @@ def show_metadata(screen_size, stdscr,doc,n):
                 meta_pad.chgat(i, 0, span[i], att)
             meta_pad.refresh(0, 0, Y + 3, X + 2, hi - 2, wi - 2)
             key = meta_pad.getch()
-            if key in QUIT:
+            if key in QUIT or key in SHOW_META:
                 clear_screen()
                 return
             if key in NEXT_PAGE:
