@@ -101,7 +101,7 @@ if sys.platform == 'win32':
 elif sys.platform == 'darwin':
     URL_BROWSER = 'open'
 else:
-    for i in VWR_LIST:
+    for i in URL_BROWSER_LIST:
         if shutil.which(i) is not None:
             VWR = i
             break
