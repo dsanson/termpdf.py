@@ -95,13 +95,14 @@ URL_BROWSER_LIST = [
     'lynx'
 ]
 
+
 URL_BROWSER = None
 if sys.platform == 'darwin':
     URL_BROWSER = 'open'
 else:
     for i in URL_BROWSER_LIST:
         if shutil.which(i) is not None:
-            VWR = i
+            URL_BROWSER = i
             break
 
 def screen_size_function(fd=None):
