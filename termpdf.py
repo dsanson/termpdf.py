@@ -24,12 +24,14 @@ Shortcuts:
     gg:             go to beginning of document
     G:              go to end of document
     [count]G:       go to page [count]
+    f:              hints mode
     t:              display table of contents 
     M:              display metadata
     u:              display URLs
     T:              toggle text mode
     r:              rotate [count] quarter turns clockwise
     R:              rotate [count] quarter turns counterclockwise
+    c:              toggle autocropping of margins
     a:              toggle alpha transparency
     i:              invert colors
     d:              darken using TINT_COLOR
@@ -47,51 +49,57 @@ import termios
 import subprocess
 import zlib
 import shutil
+import select
+from time import sleep
 from base64 import standard_b64encode
 from collections import namedtuple
 from math import ceil
 
 # Keyboard shortcuts
-GOTO_PAGE        = {ord("G")}
-GOTO             = {ord("g")}
-NEXT_PAGE        = {ord("j"), curses.KEY_DOWN, ord(" ")}
-PREV_PAGE        = {ord("k"), curses.KEY_UP}
-NEXT_CHAP        = {ord("l"), curses.KEY_RIGHT}
-PREV_CHAP        = {ord("h"), curses.KEY_LEFT}
+GOTO_PAGE        = {ord('G')}
+GOTO             = {ord('g')}
+NEXT_PAGE        = {ord('j'), curses.KEY_DOWN, ord(' ')}
+PREV_PAGE        = {ord('k'), curses.KEY_UP}
+NEXT_CHAP        = {ord('l'), curses.KEY_RIGHT}
+PREV_CHAP        = {ord('h'), curses.KEY_LEFT}
+HINTS            = {ord('f')}
 OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
-SHOW_TOC         = {ord("t")}
-SHOW_META        = {ord("M")}
-SHOW_URLS        = {ord("u")}
-TOGGLE_TEXT_MODE = {ord("T")}
-ROTATE_CW        = {ord("r")}
-ROTATE_CCW       = {ord("R")}
-TOGGLE_ALPHA     = {ord("a")}
-TOGGLE_INVERT    = {ord("i")}
-TOGGLE_TINT      = {ord("d")}
+SHOW_TOC         = {ord('t')}
+SHOW_META        = {ord('M')}
+SHOW_URLS        = {ord('u')}
+TOGGLE_TEXT_MODE = {ord('T')}
+ROTATE_CW        = {ord('r')}
+ROTATE_CCW       = {ord('R')}
+TOGGLE_AUTOCROP  = {ord('c')}
+TOGGLE_ALPHA     = {ord('a')}
+TOGGLE_INVERT    = {ord('i')}
+TOGGLE_TINT      = {ord('d')}
 REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
-QUIT             = {3, ord("q")}
-DEBUG            = {ord("D")}
+QUIT             = {3, ord('q')}
+DEBUG            = {ord('D')}
 
 # Defaults
-TINT_COLOR    = "antiquewhite2"
+NVIM_LISTEN_ADDRESS  = '/tmp/neovim-termpdf-bridge'
+NOTE_FILE = '~/org/reading.org'
+TINT_COLOR    = 'antiquewhite2'
 ZINDEX        = -1
 
 URL_BROWSER_LIST = [
-    "gnome-open",
-    "gvfs-open",
-    "xdg-open",
-    "kde-open",
-    "firefox",
-    "w3m",
-    "elinks",
-    "lynx"
+    'gnome-open',
+    'gvfs-open',
+    'xdg-open',
+    'kde-open',
+    'firefox',
+    'w3m',
+    'elinks',
+    'lynx'
 ]
 
 URL_BROWSER = None
-if sys.platform == "win32":
-    URL_BROWSER = "start"
-elif sys.platform == "darwin":
-    URL_BROWSER = "open"
+if sys.platform == 'win32':
+    URL_BROWSER = 'start'
+elif sys.platform == 'darwin':
+    URL_BROWSER = 'open'
 else:
     for i in VWR_LIST:
         if shutil.which(i) is not None:
@@ -159,6 +167,7 @@ def write_chunked(cmd, data):
 
 # move the cursor to coordinates c,r
 def set_cursor(x_place, y_place):
+    global place
     sys.stdout.buffer.write('\033[{};{}f'.format(y_place, x_place).encode('ascii'))
 
 def set_image_cursor(display_width, display_height, ss_width, ss_height):
@@ -169,6 +178,7 @@ def set_image_cursor(display_width, display_height, ss_width, ss_height):
     y_place_pixels = (ss_height / 2) - (display_height / 2)
     y_place = int(ceil(y_place_pixels / screen_size().cell_height) - 1)
     y_place = max(0,y_place)
+    place = [x_place_pixels, y_place_pixels]
     set_cursor(x_place, y_place)
 
 # place a string at coordinates c,r
@@ -188,9 +198,22 @@ def clear_page(n):
     cmd = {'a': 'd', 'd': 'a', 'i': n + 1}
     write_gr_cmd(cmd)
 
-def display_page(doc, n, opts):
+def display_page(doc, n, opts, do_crop):
+    global factor
     global is_stale
     page = doc.loadPage(n)
+
+    # crop the page if do_crop is true
+    if do_crop:
+        # first need to reset the cropbox 
+        page.setCropBox(page.MediaBox)
+        # calculate the smallest rect containing all blocks
+        crop = auto_crop(doc, n) 
+        # set the new cropbox
+        page.setCropBox(crop)
+    elif doc.isPDF:
+        # reset the cropbox
+        page.setCropBox(page.MediaBox)
 
     screen_size = screen_size_function()
     ss_width = screen_size().width
@@ -542,11 +565,103 @@ def show_urls(stdscr, doc, n):
                 subprocess.run([URL_BROWSER, urls[i]], check=True)
                 return ""
 
+def translate_cords(x,y):
+    x = (x * factor) + place[0]
+    y = (y * factor) + place[1]
+    return x,y
 
+def highlight_rect(rect):
+    rect = rect.irect()
+    box = fitz.Pixmap(fitz.csRGB, rect, True)
+    box.setRect(box.irect, (255,255,0)) # fill it with some background color
+
+# hint mode, not functional
+def follow_hint(doc,n):
+    screen_size = screen_size_function()
+    cell_w = screen_size().cell_width
+    cell_h = screen_size().cell_height 
+    page = doc.loadPage(n)
+    refs = page.getLinks()
+    pad_width = 20
+    if len(refs) == 0:
+        return n, 'No URLs on page'
+    else:
+        for i, ref in enumerate(refs):
+            rect = ref['from'].normalize()
+            x,y = rect.x0, rect.y0
+            x,y = translate_cords(x,y)
+            x = ceil(x / cell_w)
+            y = ceil(y / cell_h)
+            place_string(x,y,str(i))
+        return n, 'Hints mode not yet functional'
+
+# goto link, not used
+def goto_link(doc,n,link):
+    kind = link.dest.kind
+    # 0 == no destination
+    # 1 == internal link
+    # 2 == uri
+    # 3 == launch link
+    # 5 == external pdf link
+    if kind == 0:
+        return n
+    elif kind == 1:
+        # todo: highlight location on page
+        return link.dest.page
+    elif kind == 2:
+        # add uri handler here
+        subprocess.run([URL_BROWSER, link.dest.uri], check=True)
+        return n
+    elif kind == 3:
+        # not sure what these are
+        return n
+    elif kind == 5:
+        # open external pdf in new buffer
+        return n
+    else:
+        return n
+
+# neovim integration
+
+def init_neovim_bridge():
+    try:
+        from pynvim import attach
+    except:
+        return(None, 'Neovim not available')
+    try:
+        nvim = attach('socket', path=NVIM_LISTEN_ADDRESS)
+    except:
+        try:
+            kcmd = 'kitty @ new-window --title {} --keep-focus'.format('termpdf-notes')
+            ncmd = 'env NVIM_LISTEN_ADDRESS={} nvim {}'.format(NVIM_LISTEN_ADDRESS, NOTE_FILE)
+            os.system('{} {}'.format(kcmd,ncmd))
+            sleep(0.1)
+            nvim = attach('socket', path=NVIM_LISTEN_ADDRESS)
+        except:
+            return(None, 'Unable to connect to nvim')
+    return(nvim,'Connected')
+
+def send_to_neovim(nvim,text):
+    if not nvim:
+        nvim, m = init_neovim_bridge()
+        if not nvim:
+            return None, m
+    buffer = nvim.current.buffer
+    buffer.append(text)
+    return nvim, ""
+
+# calculate the smallest rectangle that contains all blocks on page
+def auto_crop(doc, n):
+    page = doc.loadPage(n)
+    blocks = page.getTextBlocks(images=True)
+    crop = fitz.Rect(blocks[0][:4])
+    for block in blocks:
+        b = fitz.Rect(block[:4])
+        crop = crop | b
+    return crop
 
 # TODO: Annotations
 # TODO: Bookmarks
-# TODO: Open links
 # TODO: Fill in Forms
 # TODO: Keyboard Visual Mode
 # TODO: Mouse Mode
@@ -692,7 +807,8 @@ def viewer(doc, n=0):
     count_string = ""
     message = ""
     opts = {"rotation": 0, "alpha": False, "invert": False, "tint": False}
-   
+    nvim = None 
+    do_crop = False
     
     runs = 0
 
@@ -708,7 +824,7 @@ def viewer(doc, n=0):
 
         # only update image when changed page or image is stale
         if m != n or is_stale[n]:
-            display_page(doc, n, opts)
+            display_page(doc, n, opts, do_crop)
 
         # only update status bar when page or message changed    
         if m != n or message != old_message:
@@ -777,6 +893,9 @@ def viewer(doc, n=0):
             elif stack[0] in GOTO and char in GOTO:
                 n = goto_page(doc, 0)
                 stack = [0] 
+            elif char in HINTS:
+                target, message = follow_hint(doc, n)
+                stack = [0]
             elif char in ROTATE_CW:
                 opts["rotation"] = (opts["rotation"] + 90 * count) % 360
                 mark_all_pages_as_stale(pages)
@@ -785,6 +904,10 @@ def viewer(doc, n=0):
                 opts["rotation"] = (opts["rotation"] - 90 * count) % 360
                 mark_all_pages_as_stale(pages)
                 stack = [0] 
+            elif char in TOGGLE_AUTOCROP:
+                if doc.isPDF:
+                    do_crop = not do_crop
+                    mark_all_pages_as_stale(pages)
             elif char in TOGGLE_ALPHA:
                 opts["alpha"] = not opts["alpha"]
                 mark_all_pages_as_stale(pages)
@@ -816,7 +939,10 @@ def viewer(doc, n=0):
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
+                # nvim, message = send_to_neovim(nvim, "hello")
+                # show_links(stdscr,doc,n)
                 pass
+                 
             else:
                 stack = [char] + stack
             
@@ -863,11 +989,19 @@ def parse_args(args):
 
 
 def main(args=sys.argv):
+
     global is_stale
     is_stale = []
+    global place
+    place = [0,0]
+
+    if not sys.stdin.isatty():
+        raise SystemExit('unable to run in this context')
+
+    if len(args) == 1:
+        args = args + ['-h']
 
     item, n = parse_args(args[1:])
-
 
     screen_size = screen_size_function()
     if screen_size().width == 0:
@@ -884,4 +1018,6 @@ def main(args=sys.argv):
 
 if __name__ == '__main__':
     main()
+else:
+    print("not main")
 

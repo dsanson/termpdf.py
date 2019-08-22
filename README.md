@@ -115,6 +115,10 @@ Or copy it somewhere in your path.
 -   [x] invert colors ("dark mode")
 -   [x] toggle tinted background
 -   [ ] Cropping and zooming
+    -   [x] autocrop margins
+    -   [ ] fit to width
+    -   [ ] fit to height
+    -   [ ] arbitrary zooming
 -   [ ] Reflowing (for ePub and Html)
 
 ## Annotations and Editing
