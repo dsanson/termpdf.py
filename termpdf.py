@@ -654,10 +654,14 @@ def send_to_neovim(nvim,text):
 def auto_crop(doc, n):
     page = doc.loadPage(n)
     blocks = page.getTextBlocks(images=True)
-    crop = fitz.Rect(blocks[0][:4])
-    for block in blocks:
-        b = fitz.Rect(block[:4])
-        crop = crop | b
+    if len(blocks) > 0:
+        crop = fitz.Rect(blocks[0][:4])
+        for block in blocks:
+            b = fitz.Rect(block[:4])
+            crop = crop | b
+    else:
+        # empty page!
+        crop = fitz.Rect(0,0,0,0)
     return crop
 
 # TODO: Annotations
