@@ -555,6 +555,58 @@ def show_urls(screen_size, stdscr, doc, n):
                 subprocess.run([URL_BROWSER, urls[i]], check=True)
                 return ""
 
+
+# mouse handler
+def mouse_handler(stdscr, screen_size, doc, n, count):
+
+    message = ""
+    _,x,y,_,b = curses.getmouse()    
+    while curses.REPORT_MOUSE_POSITION & b:
+        stdscr.getch()
+        _,x,y,_,b = curses.getmouse()    
+    if curses.BUTTON1_PRESSED & b:
+        # message = "button 1 pressed"
+        pass
+    elif curses.BUTTON1_RELEASED & b:
+        # message = "button 1 released"
+        pass
+    elif curses.BUTTON2_PRESSED & b:
+        # message = "button 2 pressed"
+        n = goto_page(doc, n + count)
+    elif curses.BUTTON2_RELEASED & b:
+        # message = "button 2 released"
+        pass
+    elif curses.BUTTON3_PRESSED & b:
+        # message = "button 3 pressed"
+        pass
+    elif curses.BUTTON3_RELEASED & b:
+        # message = "button 3 released"
+        pass
+    elif curses.BUTTON4_PRESSED & b:
+        # message = "button 4 pressed"
+        n = goto_page(doc, n - count)
+    elif curses.BUTTON4_RELEASED & b:
+        # message = "button 4 released"
+        pass
+    elif curses.BUTTON1_DOUBLE_CLICKED & b:
+        # message = "button 1 double clicked"
+        pass
+    elif curses.BUTTON3_DOUBLE_CLICKED & b:
+        # message = "button 3 double clicked"
+        pass
+    elif curses.BUTTON_SHIFT & b:
+        # message = "button shift"
+        pass
+    elif curses.BUTTON_CTRL & b:
+        # message = "button ctrl"
+        pass
+    else:
+        # message = str(b)
+        pass
+    return n, message
+
+
+
 def translate_cords(x,y):
     # x = (x * factor) + place[0]
     # y = (y * factor) + place[1]
@@ -684,15 +736,15 @@ def text_viewer(screen_size, stdscr,doc,n):
 
         # only update status bar when page or message changed    
         if m != n or message != old_message:
-            update_status_bar(screen_size, doc, n,"", message)
+            update_status_bar(screen_size, doc, n, "", message)
 
         # reset change tracking
         m = n
         old_message = message
 
-        page_text = doc.getPageText(n,"text")
+        page_text = doc.getPageText(n,'text')
         if len(page_text) == 0:
-            page_text = center_string('<--blank page-->', width)
+            page_text = center_string('<--BLANK PAGE-->', width)
         page_text = wrap(page_text,width)
 
         text_pad = curses.newpad(len(page_text), width)
@@ -794,6 +846,17 @@ def viewer(screen_size, doc, n=0):
     stdscr.clear()
     curses.noecho()
     curses.curs_set(0) 
+    curses.mousemask(curses.REPORT_MOUSE_POSITION
+        | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
+        | curses.BUTTON2_PRESSED | curses.BUTTON2_RELEASED
+        | curses.BUTTON3_PRESSED | curses.BUTTON3_RELEASED
+        | curses.BUTTON4_PRESSED | curses.BUTTON4_RELEASED
+        | curses.BUTTON1_DOUBLE_CLICKED | curses.BUTTON1_TRIPLE_CLICKED
+        | curses.BUTTON2_DOUBLE_CLICKED | curses.BUTTON2_TRIPLE_CLICKED
+        | curses.BUTTON3_DOUBLE_CLICKED | curses.BUTTON3_TRIPLE_CLICKED
+        | curses.BUTTON4_DOUBLE_CLICKED | curses.BUTTON4_TRIPLE_CLICKED
+        | curses.BUTTON_SHIFT | curses.BUTTON_ALT
+        | curses.BUTTON_CTRL)
     stdscr.keypad(True) # Handle our own escape codes for now
     #stdscr.timeout(-1)
     stdscr.nodelay(True)
@@ -941,6 +1004,10 @@ def viewer(screen_size, doc, n=0):
                 stack = [0] 
             elif char in REFRESH: # Ctrl-R
                 mark_all_pages_as_stale(pages)
+            elif char == curses.KEY_MOUSE:
+                n, message = mouse_handler(stdscr,screen_size,doc,n,count)
+                stack = [0]
+
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
