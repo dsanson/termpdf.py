@@ -105,8 +105,6 @@ else:
             break
 
 def screen_size_function(fd=None):
-    # ans = getattr(screen_size_function, 'ans', None)
-    # if ans is None:
     Size = namedtuple('Size', 'rows cols width height cell_width cell_height')
     if fd is None:
         fd = sys.stdout
@@ -167,8 +165,8 @@ def write_chunked(cmd, data):
 def set_cursor(x_place, y_place):
     sys.stdout.buffer.write('\033[{};{}f'.format(y_place, x_place).encode('ascii'))
 
-def set_image_cursor(display_width, display_height, ss_width, ss_height):
-    screen_size = screen_size_function()
+# center image
+def set_image_cursor(screen_size, display_width, display_height, ss_width, ss_height):
     x_place_pixels = (ss_width / 2) - (display_width / 2)
     x_place = int(x_place_pixels / screen_size().cell_width) 
     y_place_pixels = (ss_height / 2) - (display_height / 2)
@@ -181,18 +179,20 @@ def place_string(c,r,string):
     sys.stdout.write(string)
     sys.stdout.flush()
 
+# clear terminal screen
 def clear_screen():
     sys.stdout.buffer.write('\033[2J'.encode('ascii'))
     # subprocess.run('clear')
     # using the key code seems to work the best of the options.
 
+# delete currently displayed page
 def clear_page(n):
     # this does not delete the page from kitty's memory;
     # it just removes it from the display.
     cmd = {'a': 'd', 'd': 'a', 'i': n + 1}
     write_gr_cmd(cmd)
 
-def display_page(doc, n, opts, do_crop):
+def display_page(screen_size, doc, n, opts, do_crop):
     global factor
     global is_stale
     page = doc.loadPage(n)
@@ -209,7 +209,6 @@ def display_page(doc, n, opts, do_crop):
         # reset the cropbox
         page.setCropBox(page.MediaBox)
 
-    screen_size = screen_size_function()
     ss_width = screen_size().width
     ss_height = (screen_size().height - screen_size().cell_height)
 
@@ -231,7 +230,7 @@ def display_page(doc, n, opts, do_crop):
     display_height = factor * page_height
 
     # move the cursor to the proper location
-    set_image_cursor(display_width, display_height, ss_width, ss_height)
+    set_image_cursor(screen_size, display_width, display_height, ss_width, ss_height)
 
     # If the image is already in memory and not stale, display it.
     # Otherwise, transfer it.
@@ -289,12 +288,11 @@ def clean_quit(stdscr, doc):
 
     raise SystemExit()
 
-def update_status_bar(doc, n, cmd, message):
+def update_status_bar(screen_size, doc, n, cmd, message):
     # pages start from 1, not 0!
     p = str(n + 1)
     t = doc.pageCount
 
-    screen_size = screen_size_function()
     c = screen_size().cols
     r = screen_size().rows
 
@@ -303,7 +301,7 @@ def update_status_bar(doc, n, cmd, message):
     place_string(1,r,left_bar)
     # center bar for messages
     center_bar = message
-    offset = ceil((c / 2) - (len(message) / 2)) - 1
+    offset = int((c / 2) - (len(message) / 2)) 
     place_string(offset,r,center_bar)
     # [current page/total pages]
     right_bar = '     [{}/{}]'.format(p, t)
@@ -379,7 +377,7 @@ def search_page(doc, current, search):
 def center_string(string, width):
     return '{:^{width}}'.format(string, width=width)
 
-def show_toc(stdscr,doc,n):
+def show_toc(screen_size, stdscr,doc,n):
 
     toc = doc.getToC()
 
@@ -390,7 +388,6 @@ def show_toc(stdscr,doc,n):
         clear_page(n)
         clear_screen()
 
-        screen_size = screen_size_function()
         cols = screen_size().cols
         rows = screen_size().rows
 
@@ -441,7 +438,7 @@ def show_toc(stdscr,doc,n):
                 clear_screen()
                 return toc[index][2] - 1, ""
 
-def show_metadata(stdscr,doc,n):
+def show_metadata(screen_size, stdscr,doc,n):
 
     metadata = doc.metadata
     
@@ -451,7 +448,6 @@ def show_metadata(stdscr,doc,n):
         is_stale[n] = True
         clear_page(n)
 
-        screen_size = screen_size_function()
         cols = screen_size().cols
         rows = screen_size().rows
 
@@ -496,7 +492,7 @@ def show_metadata(stdscr,doc,n):
                 #TODO: edit fields
                 pass
 
-def show_urls(stdscr, doc, n):
+def show_urls(screen_size, stdscr, doc, n):
 
     page = doc.loadPage(n)
     refs = page.getLinks()
@@ -515,7 +511,6 @@ def show_urls(stdscr, doc, n):
         clear_page(n)
         clear_screen()
 
-        screen_size = screen_size_function()
         cols = screen_size().cols
         rows = screen_size().rows
 
@@ -570,8 +565,7 @@ def highlight_rect(rect):
     box.setRect(box.irect, (255,255,0)) # fill it with some background color
 
 # hint mode, not functional
-def follow_hint(doc,n):
-    screen_size = screen_size_function()
+def follow_hint(screen_size, doc,n):
     cell_w = screen_size().cell_width
     cell_h = screen_size().cell_height 
     page = doc.loadPage(n)
@@ -668,24 +662,36 @@ def auto_crop(doc, n):
 # TODO: Thumbnail Mode
 # TODO: OCR
 
-def text_viewer(stdscr,doc,n):
+def text_viewer(screen_size, stdscr,doc,n):
 
     from textwrap import wrap 
     clear_page(n)
 
-    screen_size = screen_size_function()
     cols = screen_size().cols
     rows = screen_size().rows
 
     width = min(80, cols - 2)
     height = rows - 2
-    x_offset = ceil((cols / 2) - (width / 2))
+    x_offset = int((cols / 2) - (width / 2))
     y_offset = 0
 
     pages = doc.pageCount - 1
+    m = n
+    message = old_message = ""
 
     while True:
+
+        # only update status bar when page or message changed    
+        if m != n or message != old_message:
+            update_status_bar(screen_size, doc, n,"", message)
+
+        # reset change tracking
+        m = n
+        old_message = message
+
         page_text = doc.getPageText(n,"text")
+        if len(page_text) == 0:
+            page_text = center_string('<--blank page-->', width)
         page_text = wrap(page_text,width)
 
         text_pad = curses.newpad(len(page_text), width)
@@ -696,8 +702,6 @@ def text_viewer(stdscr,doc,n):
         
         last = int(len(page_text) / height)
        
-
-        message = ""
         key = 0 
         stack = [0]
         count_string = ""
@@ -717,9 +721,9 @@ def text_viewer(stdscr,doc,n):
             key = text_pad.getch()
 
             if key == 27: # ESC
-                update_status_bar(doc, n, "", message)
+                update_status_bar(screen_size, doc, n, "", message)
             elif 32 < key < 256: # printable characters
-                update_status_bar(doc, n, count_string + chr(key), message) # echo input
+                update_status_bar(screen_size, doc, n, count_string + chr(key), message) # echo input
 
             # perform actions based on keyacter commands
             if key == -1:
@@ -771,19 +775,19 @@ def text_viewer(stdscr,doc,n):
                     change_page = True
                     stack = [0] 
                 elif key in SHOW_TOC:
-                    target, message = show_toc(stdscr,doc, n)
+                    target, message = show_toc(screen_size, stdscr,doc, n)
                     n = goto_page(doc, target)
                     change_page = True
                     stack = [0] 
                 elif key in SHOW_META:
-                    show_metadata(stdscr,doc, n) 
+                    show_metadata(screen_size, stdscr,doc, n) 
                     stack = [0] 
                 else:
                     stack = [key] + stack
                 count_string = ""
 
 
-def viewer(doc, n=0):
+def viewer(screen_size, doc, n=0):
 
     stdscr = curses.initscr()
     stdscr.clear()
@@ -824,11 +828,11 @@ def viewer(doc, n=0):
 
         # only update image when changed page or image is stale
         if m != n or is_stale[n]:
-            display_page(doc, n, opts, do_crop)
+            display_page(screen_size, doc, n, opts, do_crop)
 
         # only update status bar when page or message changed    
         if m != n or message != old_message:
-            update_status_bar(doc, n,"", message)
+            update_status_bar(screen_size, doc, n,"", message)
 
         # reset change tracking
         m = n
@@ -845,19 +849,19 @@ def viewer(doc, n=0):
 
         # echo char to status_bar and clobber escape codes
         if char == 27: # ESC
-            update_status_bar(doc, n, "", message)
+            update_status_bar(screen_size, doc, n, "", message)
         elif stack[0] == 27 and chr(char) == "_": # clobber ESC code
             message = 'STUCK: Press ESC\\ to resume.'
-            update_status_bar(doc, n, "", message)
+            update_status_bar(screen_size, doc, n, "", message)
             r = b''
             while r[-2:] != b'\033\\':
                 r += sys.stdin.buffer.read(1)
-            update_status_bar(doc, n, '', ' ' * len(message))
+            update_status_bar(screen_size, doc, n, '', ' ' * len(message))
             message = ""
             count_string = "" 
             stack = [0] 
         elif 32 < char < 256: # printable characters
-            update_status_bar(doc, n, count_string + chr(char), message) # echo input
+            update_status_bar(screen_size, doc, n, count_string + chr(char), message) # echo input
 
         # perform actions based on character commands
         if char == -1:
@@ -921,17 +925,17 @@ def viewer(doc, n=0):
                 mark_all_pages_as_stale(pages)
                 stack = [0] 
             elif char in SHOW_TOC:
-                target, message = show_toc(stdscr,doc, n)
+                target, message = show_toc(screen_size, stdscr,doc, n)
                 n = goto_page(doc, target)
                 stack = [0] 
             elif char in SHOW_META:
-                show_metadata(stdscr,doc, n) 
+                show_metadata(screen_size, stdscr,doc, n) 
                 stack = [0] 
             elif char in SHOW_URLS:
-                message = show_urls(stdscr,doc,n)
+                message = show_urls(screen_size, stdscr,doc,n)
                 stack = [0]
             elif char in TOGGLE_TEXT_MODE:
-                n = text_viewer(stdscr,doc,n)
+                n = text_viewer(screen_size, stdscr,doc,n)
                 is_stale[m] = True
                 stack = [0] 
             elif char in REFRESH: # Ctrl-R
@@ -1012,7 +1016,7 @@ def main(args=sys.argv):
     except:
         raise SystemExit('Unable to open "{}".'.format(item))
 
-    viewer(doc, n)
+    viewer(screen_size, doc, n)
 
 if __name__ == '__main__':
     main()
