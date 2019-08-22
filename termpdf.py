@@ -167,18 +167,14 @@ def write_chunked(cmd, data):
 
 # move the cursor to coordinates c,r
 def set_cursor(x_place, y_place):
-    global place
     sys.stdout.buffer.write('\033[{};{}f'.format(y_place, x_place).encode('ascii'))
 
 def set_image_cursor(display_width, display_height, ss_width, ss_height):
     screen_size = screen_size_function()
     x_place_pixels = (ss_width / 2) - (display_width / 2)
-    x_place = int(ceil(x_place_pixels / screen_size().cell_width) - 1)
-    x_place = max(0,x_place)
+    x_place = int(x_place_pixels / screen_size().cell_width) 
     y_place_pixels = (ss_height / 2) - (display_height / 2)
-    y_place = int(ceil(y_place_pixels / screen_size().cell_height) - 1)
-    y_place = max(0,y_place)
-    place = [x_place_pixels, y_place_pixels]
+    y_place = int(y_place_pixels / screen_size().cell_height)
     set_cursor(x_place, y_place)
 
 # place a string at coordinates c,r
@@ -566,8 +562,8 @@ def show_urls(stdscr, doc, n):
                 return ""
 
 def translate_cords(x,y):
-    x = (x * factor) + place[0]
-    y = (y * factor) + place[1]
+    # x = (x * factor) + place[0]
+    # y = (y * factor) + place[1]
     return x,y
 
 def highlight_rect(rect):
@@ -998,8 +994,6 @@ def main(args=sys.argv):
 
     global is_stale
     is_stale = []
-    global place
-    place = [0,0]
 
     if not sys.stdin.isatty():
         raise SystemExit('unable to run in this context')
