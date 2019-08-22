@@ -96,9 +96,7 @@ URL_BROWSER_LIST = [
 ]
 
 URL_BROWSER = None
-if sys.platform == 'win32':
-    URL_BROWSER = 'start'
-elif sys.platform == 'darwin':
+if sys.platform == 'darwin':
     URL_BROWSER = 'open'
 else:
     for i in URL_BROWSER_LIST:
