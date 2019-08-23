@@ -6,6 +6,7 @@ Usage:
 
 Options:
     -n n, --page-number n
+    --nvim-listen-address socket
     -v, --version
     -h, --help
 """
@@ -39,6 +40,7 @@ Shortcuts:
     q:              quit
 """
 
+import re
 import array
 import curses
 import fcntl
@@ -168,10 +170,12 @@ def set_cursor(x_place, y_place):
 
 # center image
 def set_image_cursor(screen_size, display_width, display_height, ss_width, ss_height):
+    global place
     x_place_pixels = (ss_width / 2) - (display_width / 2)
     x_place = int(x_place_pixels / screen_size().cell_width) 
     y_place_pixels = (ss_height / 2) - (display_height / 2)
     y_place = int(y_place_pixels / screen_size().cell_height)
+    place = (x_place, y_place)
     set_cursor(x_place, y_place)
 
 # place a string at coordinates c,r
@@ -555,20 +559,54 @@ def show_urls(screen_size, stdscr, doc, n):
                 subprocess.run([URL_BROWSER, urls[i]], check=True)
                 return ""
 
+# convert cells into pixels
+def convert_cells_to_pixels(screen_size, *coordinates):
+    global factor
+    global place
+    pixel_coordinates = []
+    for coord in coordinates:
+        xp = (coord[0] - place[0]) * screen_size().cell_width / factor
+        yp = (coord[1] - place[1]) * screen_size().cell_height / factor
+        pixel_coordinates = pixel_coordinates + [(xp,yp)]
+    return pixel_coordinates
+
+# get text that is inside a Rect
+def get_text_in_Rect(doc, n, rect):
+    from operator import itemgetter
+    from itertools import groupby
+    page = doc.loadPage(n)
+    words = page.getTextWords()
+    mywords = [w for w in words if fitz.Rect(w[:4]) in rect]
+    mywords.sort(key=itemgetter(3, 0))  # sort by y1, x0 of the word rect
+    group = groupby(mywords, key=itemgetter(3))
+    text = ""
+    for y1, gwords in group:
+        text = text + " ".join(w[4] for w in gwords)
+    return text
 
 # mouse handler
-def mouse_handler(stdscr, screen_size, doc, n, count):
+def mouse_handler(stdscr, screen_size, doc, n, count, nvim):
 
     message = ""
     _,x,y,_,b = curses.getmouse()    
+    x = x + 1
+    y = y + 1
     while curses.REPORT_MOUSE_POSITION & b:
         stdscr.getch()
         _,x,y,_,b = curses.getmouse()    
     if curses.BUTTON1_PRESSED & b:
-        # message = "button 1 pressed"
-        pass
+        place_string(x,y,"+")    
+        stdscr.getch()
+        _,xc,yc,_,b = curses.getmouse()    
+        if curses.BUTTON1_RELEASED & b:
+            (xp,yp),(xcp,ycp) = convert_cells_to_pixels(screen_size, (x,y),(xc,yc))
+            select_box = fitz.Rect(xp,yp,xcp,ycp).normalize()
+            select_text = get_text_in_Rect(doc, n, select_box)
+            send_lines = [y for y in (x.strip() for x in select_text.splitlines()) if y]
+            for line in send_lines:
+                send_to_neovim(nvim, "> " + line)
+        place_string(x,y,' ')
     elif curses.BUTTON1_RELEASED & b:
-        # message = "button 1 released"
         pass
     elif curses.BUTTON2_PRESSED & b:
         # message = "button 2 pressed"
@@ -594,15 +632,13 @@ def mouse_handler(stdscr, screen_size, doc, n, count):
     elif curses.BUTTON3_DOUBLE_CLICKED & b:
         # message = "button 3 double clicked"
         pass
-    elif curses.BUTTON_SHIFT & b:
-        # message = "button shift"
-        pass
-    elif curses.BUTTON_CTRL & b:
-        # message = "button ctrl"
-        pass
     else:
         # message = str(b)
         pass
+    if curses.BUTTON_SHIFT & b:
+        message = "shift + " + message
+    elif curses.BUTTON_CTRL & b:
+        message = "ctrl + " + message
     return n, message
 
 
@@ -869,6 +905,10 @@ def viewer(screen_size, doc, n=0):
     if n < 0:
         n = max(pages + n, 0)
 
+    # santize page numbers that are too big
+    n = min(pages, n)
+
+
     mark_all_pages_as_stale(pages)
     m = -1
     stack = [0] 
@@ -1005,7 +1045,7 @@ def viewer(screen_size, doc, n=0):
             elif char in REFRESH: # Ctrl-R
                 mark_all_pages_as_stale(pages)
             elif char == curses.KEY_MOUSE:
-                n, message = mouse_handler(stdscr,screen_size,doc,n,count)
+                n, message = mouse_handler(stdscr,screen_size,doc,n,count,nvim)
                 stack = [0]
 
             elif char in DEBUG:
@@ -1023,6 +1063,7 @@ def viewer(screen_size, doc, n=0):
             count_string = ""
 
 def parse_args(args):
+    global NVIM_LISTEN_ADDRESS
     if len({"-h", "--help"} & set(args)) != 0:
         hlp = __doc__.rstrip()
         print(hlp)
@@ -1051,13 +1092,38 @@ def parse_args(args):
             except:
                 print(args)
                 raise SystemExit('no page number specified')
+        elif arg in {'--nvim-listen-address'}:
+            NVIM_LISTEN_ADDRESS = args[i + 1]
+            skip = True
         else:
             items = items + [arg]
 
     if len(items) > 1:
         print("Warning: only opening the first file...")
+   
+    file = items[0]
+
+    # custom url format:
+    #   termpdf:///path/to/file?
+    if re.match('^termpdf:///', items[0]):
+        from urllib.parse import urlparse, parse_qs
+        item = urlparse(items[0])
+        file = item.path
+        args = parse_qs(item.query)
+        if 'n' in args:
+            try:
+                n = int(args['n'][0]) - 1
+            except:
+                pass
+        if 'page-number' in args:
+            try:
+                n = int(args['page-number'][0]) - 1
+            except:
+                pass
+        if 'nvim-listen-address' in args:
+            NVIM_LISTEN_ADDRESS = args['nvim-listen-address'][0]
                 
-    return items[0], n
+    return file, n
 
 
 def main(args=sys.argv):
