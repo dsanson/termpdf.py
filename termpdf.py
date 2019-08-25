@@ -76,6 +76,8 @@ TOGGLE_AUTOCROP  = {ord('c')}
 TOGGLE_ALPHA     = {ord('a')}
 TOGGLE_INVERT    = {ord('i')}
 TOGGLE_TINT      = {ord('d')}
+INC_FONT         = {ord('+')}
+DEC_FONT         = {ord('-')}
 REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
 QUIT             = {3, ord('q')}
 DEBUG            = {ord('D')}
@@ -83,6 +85,7 @@ DEBUG            = {ord('D')}
 # Defaults
 NVIM_LISTEN_ADDRESS  = '/tmp/neovim-termpdf-bridge'
 NOTE_FILE = '~/org/reading.org'
+LINK_FORMAT = 'markdown'
 TINT_COLOR    = 'antiquewhite2'
 ZINDEX        = -1
 
@@ -570,6 +573,18 @@ def convert_cells_to_pixels(screen_size, *coordinates):
         pixel_coordinates = pixel_coordinates + [(xp,yp)]
     return pixel_coordinates
 
+def convert_pixels_to_cells(screen_size, *coordinates):
+    global factor
+    global place
+    cell_coordinates = []
+    for coord in coordinates:
+        xc = ((coord[0] * factor) + place[0] * screen_size().cell_width) / screen_size().cell_width
+        yc = ((coord[1] * factor) + place[1] * screen_size().cell_height) / screen_size().cell_height
+        xc = int(xc) + 1
+        yc = int(yc) + 1
+        cell_coordinates = cell_coordinates + [(xc,yc)]
+    return cell_coordinates
+
 # get text that is inside a Rect
 def get_text_in_Rect(doc, n, rect):
     from operator import itemgetter
@@ -584,8 +599,19 @@ def get_text_in_Rect(doc, n, rect):
         text = text + " ".join(w[4] for w in gwords)
     return text
 
+def make_link(path, doc, n):
+    title = doc.metadata['title']
+    uri = 'termpdf://{}?n={}'.format(path, n)
+    if LINK_FORMAT == 'markdown':
+        link = '[{}]({})'.format(title,uri)
+    elif LINK_FORMAT == 'org':
+        link = '[[{}][{}]'.format(uri,title)
+    else:
+        link = '<{}>'.format(uri)
+    return link
+
 # mouse handler
-def mouse_handler(stdscr, screen_size, doc, n, count, nvim):
+def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
 
     message = ""
     _,x,y,_,b = curses.getmouse()    
@@ -605,6 +631,8 @@ def mouse_handler(stdscr, screen_size, doc, n, count, nvim):
             send_lines = [y for y in (x.strip() for x in select_text.splitlines()) if y]
             for line in send_lines:
                 send_to_neovim(nvim, "> " + line)
+            link = make_link(path, doc, n)
+            send_to_neovim(nvim, link)
         place_string(x,y,' ')
     elif curses.BUTTON1_RELEASED & b:
         pass
@@ -654,27 +682,31 @@ def highlight_rect(rect):
     box.setRect(box.irect, (255,255,0)) # fill it with some background color
 
 # hint mode, not functional
-def follow_hint(screen_size, doc,n):
-    cell_w = screen_size().cell_width
-    cell_h = screen_size().cell_height 
+def follow_hint(screen_size, stdscr, doc,n):
     page = doc.loadPage(n)
     refs = page.getLinks()
-    pad_width = 20
     if len(refs) == 0:
         return n, 'No URLs on page'
     else:
         for i, ref in enumerate(refs):
             rect = ref['from'].normalize()
-            x,y = rect.x0, rect.y0
-            x,y = translate_cords(x,y)
-            x = ceil(x / cell_w)
-            y = ceil(y / cell_h)
+            xy = convert_pixels_to_cells(screen_size, (rect.x0, rect.y0))
+            x = xy[0][0]
+            y = xy[0][1]
             place_string(x,y,str(i))
-        return n, 'Hints mode not yet functional'
+        message = ""
+        key = stdscr.getch()
+        if key in range(48, 57):
+            i = int(chr(key))
+            if 0 < i <= len(refs):
+                goto_link(doc, n, refs[i]) 
+
+        clear_screen()
+        return n, message
 
 # goto link, not used
 def goto_link(doc,n,link):
-    kind = link.dest.kind
+    kind = link['kind']
     # 0 == no destination
     # 1 == internal link
     # 2 == uri
@@ -684,10 +716,10 @@ def goto_link(doc,n,link):
         return n
     elif kind == 1:
         # todo: highlight location on page
-        return link.dest.page
+        return link['page']
     elif kind == 2:
         # add uri handler here
-        subprocess.run([URL_BROWSER, link.dest.uri], check=True)
+        subprocess.run([URL_BROWSER, link['uri']], check=True)
         return n
     elif kind == 3:
         # not sure what these are
@@ -701,6 +733,7 @@ def goto_link(doc,n,link):
 # neovim integration
 
 def init_neovim_bridge():
+    global LINK_FORMAT
     try:
         from pynvim import attach
     except:
@@ -709,6 +742,7 @@ def init_neovim_bridge():
         nvim = attach('socket', path=NVIM_LISTEN_ADDRESS)
     except:
         try:
+            LINK_FORMAT = 'org'
             kcmd = 'kitty @ new-window --title {} --keep-focus'.format('termpdf-notes')
             ncmd = 'env NVIM_LISTEN_ADDRESS={} nvim {}'.format(NVIM_LISTEN_ADDRESS, NOTE_FILE)
             os.system('{} {}'.format(kcmd,ncmd))
@@ -874,9 +908,18 @@ def text_viewer(screen_size, stdscr,doc,n):
                 else:
                     stack = [key] + stack
                 count_string = ""
+def set_layout(doc, n, fontsize):
+    pages = doc.pageCount - 1
+    pct = n / pages 
+    screen_size = screen_size_function()
+    doc.layout(width=screen_size().width,
+               height=screen_size().height - screen_size().cell_height, 
+               fontsize=fontsize)
+    pages = doc.pageCount - 1
+    n = round(pages * pct)
+    return pages, n
 
-
-def viewer(screen_size, doc, n=0):
+def viewer(path, doc, n=0):
 
     stdscr = curses.initscr()
     stdscr.clear()
@@ -887,10 +930,14 @@ def viewer(screen_size, doc, n=0):
         | curses.BUTTON2_PRESSED | curses.BUTTON2_RELEASED
         | curses.BUTTON3_PRESSED | curses.BUTTON3_RELEASED
         | curses.BUTTON4_PRESSED | curses.BUTTON4_RELEASED
-        | curses.BUTTON1_DOUBLE_CLICKED | curses.BUTTON1_TRIPLE_CLICKED
-        | curses.BUTTON2_DOUBLE_CLICKED | curses.BUTTON2_TRIPLE_CLICKED
-        | curses.BUTTON3_DOUBLE_CLICKED | curses.BUTTON3_TRIPLE_CLICKED
-        | curses.BUTTON4_DOUBLE_CLICKED | curses.BUTTON4_TRIPLE_CLICKED
+        | curses.BUTTON1_DOUBLE_CLICKED 
+        | curses.BUTTON1_TRIPLE_CLICKED
+        | curses.BUTTON2_DOUBLE_CLICKED 
+        | curses.BUTTON2_TRIPLE_CLICKED
+        | curses.BUTTON3_DOUBLE_CLICKED 
+        | curses.BUTTON3_TRIPLE_CLICKED
+        | curses.BUTTON4_DOUBLE_CLICKED 
+        | curses.BUTTON4_TRIPLE_CLICKED
         | curses.BUTTON_SHIFT | curses.BUTTON_ALT
         | curses.BUTTON_CTRL)
     stdscr.keypad(True) # Handle our own escape codes for now
@@ -898,8 +945,10 @@ def viewer(screen_size, doc, n=0):
     stdscr.nodelay(True)
     stdscr.getch()
     # status_bar = curses.newwin(0,c - 1,r - 1,1)
-
-    pages = doc.pageCount - 1
+ 
+    # adjust layout for reflowable formats
+    fontsize = 36
+    pages, n = set_layout(doc, n, fontsize)
 
     # if n is negative, then open n pages from the end of the doc
     if n < 0:
@@ -932,6 +981,7 @@ def viewer(screen_size, doc, n=0):
 
         # only update image when changed page or image is stale
         if m != n or is_stale[n]:
+            screen_size = screen_size_function()
             display_page(screen_size, doc, n, opts, do_crop)
 
         # only update status bar when page or message changed    
@@ -1002,7 +1052,7 @@ def viewer(screen_size, doc, n=0):
                 n = goto_page(doc, 0)
                 stack = [0] 
             elif char in HINTS:
-                target, message = follow_hint(doc, n)
+                target, message = follow_hint(screen_size, stdscr, doc, n)
                 stack = [0]
             elif char in ROTATE_CW:
                 opts["rotation"] = (opts["rotation"] + 90 * count) % 360
@@ -1043,18 +1093,29 @@ def viewer(screen_size, doc, n=0):
                 is_stale[m] = True
                 stack = [0] 
             elif char in REFRESH: # Ctrl-R
+                pages, n = set_layout(doc, n, fontsize)
                 mark_all_pages_as_stale(pages)
-            elif char == curses.KEY_MOUSE:
-                n, message = mouse_handler(stdscr,screen_size,doc,n,count,nvim)
                 stack = [0]
-
+            elif char == curses.KEY_MOUSE:
+                n, message = mouse_handler(stdscr,screen_size,path,doc,n,count,nvim)
+                stack = [0]
+            elif char in INC_FONT:
+                fontsize += count * 2
+                pages, n = set_layout(doc, n, fontsize)
+                mark_all_pages_as_stale(pages)
+                stack = [0]
+            elif char in DEC_FONT:
+                fontsize -= count * 2
+                pages, n = set_layout(doc, n, fontsize)
+                mark_all_pages_as_stale(pages)
+                stack = [0]
             elif char in DEBUG:
                 # a spot for messing around with ideas
                 # search_page(doc, n, "the")
                 # nvim, message = send_to_neovim(nvim, "hello")
                 # show_links(stdscr,doc,n)
                 pass
-                 
+
             else:
                 stack = [char] + stack
             
@@ -1149,8 +1210,10 @@ def main(args=sys.argv):
         doc = fitz.open(item)
     except:
         raise SystemExit('Unable to open "{}".'.format(item))
+ 
+    path = os.path.abspath(item)
 
-    viewer(screen_size, doc, n)
+    viewer(path, doc, n)
 
 if __name__ == '__main__':
     main()
