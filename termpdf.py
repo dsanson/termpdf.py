@@ -90,6 +90,9 @@ LINK_FORMAT = 'markdown'
 TINT_COLOR    = 'antiquewhite2'
 ZINDEX        = -1
 
+# KITTYCMD = 'kitty @ new-window' # open notes in a kitty window
+KITTYCMD = 'kitty --single-instance --instance-group=1' # open notes in a new OS window
+
 URL_BROWSER_LIST = [
     'gnome-open',
     'gvfs-open',
@@ -100,7 +103,6 @@ URL_BROWSER_LIST = [
     'elinks',
     'lynx'
 ]
-
 
 URL_BROWSER = None
 if sys.platform == 'darwin':
@@ -601,20 +603,10 @@ def get_text_in_Rect(doc, n, rect):
     return text
 
 def make_link(path, doc, n):
-    # title = doc.metadata['title']
-    # uri = 'termpdf://{}?n={}'.format(path, n)
-    # if LINK_FORMAT == 'markdown':
-    #     link = '[{}]({})'.format(title,uri)
-    # elif LINK_FORMAT == 'org':
-    #     link = '[[{}][{}]'.format(uri,title)
-    # else:
-    #     link = '<{}>'.format(uri)
-    # return link
     if CITEKEY:
         return '[{}, {}]'.format(CITEKEY, n + 1)
     else:
-        return ''
-
+        return '[{}]'.format(n + 1)
 
 # mouse handler
 def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
@@ -624,10 +616,15 @@ def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
     x = x + 1
     y = y + 1
     while curses.REPORT_MOUSE_POSITION & b:
+        # sloppy solution for swallowing scrolling
         stdscr.getch()
         _,x,y,_,b = curses.getmouse()    
-    if curses.BUTTON1_PRESSED & b:
+    if curses.BUTTON1_CLICKED & b:
         # left click
+        link = make_link(path, doc, n)
+        send_to_neovim(nvim, [link])
+    elif curses.BUTTON1_PRESSED & b:
+        # left press
         place_string(x,y,"+")    
         stdscr.getch()
         _,xc,yc,_,b = curses.getmouse()    
@@ -760,9 +757,8 @@ def init_neovim_bridge():
     except:
         try:
             LINK_FORMAT = 'org'
-            kcmd = 'kitty @ new-window --title {} --keep-focus'.format('termpdf-notes')
             ncmd = 'env NVIM_LISTEN_ADDRESS={} nvim {}'.format(NVIM_LISTEN_ADDRESS, NOTE_FILE)
-            os.system('{} {}'.format(kcmd,ncmd))
+            os.system('{} {}'.format(KITTYCMD,ncmd))
             sleep(0.1)
             nvim = attach('socket', path=NVIM_LISTEN_ADDRESS)
         except:
@@ -778,6 +774,7 @@ def send_to_neovim(nvim,text):
     #buffer.append(text)
     line = nvim.funcs.line('.')
     nvim.funcs.append(line, text)
+    nvim.funcs.cursor(line + len(text), 0)
     return nvim, ""
 
 # calculate the smallest rectangle that contains all blocks on page
@@ -870,7 +867,7 @@ def text_viewer(screen_size, stdscr,doc,n):
             # perform actions based on keyacter commands
             if key == -1:
                 pass
-            if key in range(48, 57): # increment count_string
+            if key in range(48, 58): # increment count_string
                 count_string = count_string + chr(key)
             else:
                 if key in QUIT:
@@ -950,6 +947,7 @@ def viewer(path, doc, n=0):
         | curses.BUTTON2_PRESSED | curses.BUTTON2_RELEASED
         | curses.BUTTON3_PRESSED | curses.BUTTON3_RELEASED
         | curses.BUTTON4_PRESSED | curses.BUTTON4_RELEASED
+        | curses.BUTTON1_CLICKED | curses.BUTTON3_CLICKED
         | curses.BUTTON1_DOUBLE_CLICKED 
         | curses.BUTTON1_TRIPLE_CLICKED
         | curses.BUTTON2_DOUBLE_CLICKED 
