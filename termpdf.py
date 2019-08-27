@@ -710,7 +710,7 @@ def follow_hint(screen_size, stdscr, doc,n):
             place_string(x,y,str(i))
         message = ""
         key = stdscr.getch()
-        if key in range(48, 57):
+        if key in range(48, 58):
             i = int(chr(key))
             if 0 < i <= len(refs):
                 goto_link(doc, n, refs[i]) 
@@ -1038,7 +1038,7 @@ def viewer(path, doc, n=0):
         # perform actions based on character commands
         if char == -1:
             pass
-        if char in range(48, 57): # increment count_string
+        if char in range(48, 58): # increment count_string
             count_string = count_string + chr(char)
         else:
             if char in QUIT: 
@@ -1241,6 +1241,4 @@ def main(args=sys.argv):
 
 if __name__ == '__main__':
     main()
-else:
-    print("not main")
 
