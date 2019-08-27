@@ -52,6 +52,7 @@ import subprocess
 import zlib
 import shutil
 import select
+import pyperclip
 from time import sleep
 from base64 import standard_b64encode
 from collections import namedtuple
@@ -594,9 +595,9 @@ def get_text_in_Rect(doc, n, rect):
     mywords = [w for w in words if fitz.Rect(w[:4]) in rect]
     mywords.sort(key=itemgetter(3, 0))  # sort by y1, x0 of the word rect
     group = groupby(mywords, key=itemgetter(3))
-    text = ""
+    text = [] 
     for y1, gwords in group:
-        text = text + " ".join(w[4] for w in gwords)
+        text = text + [" ".join(w[4] for w in gwords)]
     return text
 
 def make_link(path, doc, n):
@@ -626,6 +627,7 @@ def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
         stdscr.getch()
         _,x,y,_,b = curses.getmouse()    
     if curses.BUTTON1_PRESSED & b:
+        # left click
         place_string(x,y,"+")    
         stdscr.getch()
         _,xc,yc,_,b = curses.getmouse()    
@@ -633,13 +635,9 @@ def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
             (xp,yp),(xcp,ycp) = convert_cells_to_pixels(screen_size, (x,y),(xc,yc))
             select_box = fitz.Rect(xp,yp,xcp,ycp).normalize()
             select_text = get_text_in_Rect(doc, n, select_box)
-            send_lines = [y for y in (x.strip() for x in select_text.splitlines()) if y]
-            send_to_neovim(nvim, '#+BEGIN_QUOTE')
-            for line in send_lines:
-                send_to_neovim(nvim, "  " + line)
             link = make_link(path, doc, n)
-            send_to_neovim(nvim, "  " + link)
-            send_to_neovim(nvim, '#+END_QUOTE')
+            send_lines = ['', '#+BEGIN_QUOTE'] + select_text + [link, '#+END_QUOTE', '']
+            send_to_neovim(nvim, send_lines)
         place_string(x,y,' ')
     elif curses.BUTTON1_RELEASED & b:
         pass
@@ -650,8 +648,20 @@ def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
         # message = "button 2 released"
         pass
     elif curses.BUTTON3_PRESSED & b:
-        # message = "button 3 pressed"
-        pass
+        # right click
+        place_string(x,y,"+")
+        stdscr.getch()
+        _,xc,yc,_,b = curses.getmouse()    
+        if curses.BUTTON3_RELEASED & b:
+            (xp,yp),(xcp,ycp) = convert_cells_to_pixels(screen_size, (x,y),(xc,yc))
+            select_box = fitz.Rect(xp,yp,xcp,ycp).normalize()
+            select_text = get_text_in_Rect(doc, n, select_box)
+            link = make_link(path, doc, n)
+            select_text = select_text + [link]
+            pyperclip.copy(' '.join(select_text))
+            message = 'copied'
+
+        place_string(x,y,' ')
     elif curses.BUTTON3_RELEASED & b:
         # message = "button 3 released"
         pass
@@ -764,8 +774,10 @@ def send_to_neovim(nvim,text):
         nvim, m = init_neovim_bridge()
         if not nvim:
             return None, m
-    buffer = nvim.current.buffer
-    buffer.append(text)
+    #buffer = nvim.current.buffer
+    #buffer.append(text)
+    line = nvim.funcs.line('.')
+    nvim.funcs.append(line, text)
     return nvim, ""
 
 # calculate the smallest rectangle that contains all blocks on page
