@@ -600,15 +600,20 @@ def get_text_in_Rect(doc, n, rect):
     return text
 
 def make_link(path, doc, n):
-    title = doc.metadata['title']
-    uri = 'termpdf://{}?n={}'.format(path, n)
-    if LINK_FORMAT == 'markdown':
-        link = '[{}]({})'.format(title,uri)
-    elif LINK_FORMAT == 'org':
-        link = '[[{}][{}]'.format(uri,title)
+    # title = doc.metadata['title']
+    # uri = 'termpdf://{}?n={}'.format(path, n)
+    # if LINK_FORMAT == 'markdown':
+    #     link = '[{}]({})'.format(title,uri)
+    # elif LINK_FORMAT == 'org':
+    #     link = '[[{}][{}]'.format(uri,title)
+    # else:
+    #     link = '<{}>'.format(uri)
+    # return link
+    if CITEKEY:
+        return '[{}, {}]'.format(CITEKEY, n + 1)
     else:
-        link = '<{}>'.format(uri)
-    return link
+        return ''
+
 
 # mouse handler
 def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
@@ -629,10 +634,12 @@ def mouse_handler(stdscr, screen_size, path, doc, n, count, nvim):
             select_box = fitz.Rect(xp,yp,xcp,ycp).normalize()
             select_text = get_text_in_Rect(doc, n, select_box)
             send_lines = [y for y in (x.strip() for x in select_text.splitlines()) if y]
+            send_to_neovim(nvim, '#+BEGIN_QUOTE')
             for line in send_lines:
-                send_to_neovim(nvim, "> " + line)
+                send_to_neovim(nvim, "  " + line)
             link = make_link(path, doc, n)
-            send_to_neovim(nvim, link)
+            send_to_neovim(nvim, "  " + link)
+            send_to_neovim(nvim, '#+END_QUOTE')
         place_string(x,y,' ')
     elif curses.BUTTON1_RELEASED & b:
         pass
@@ -919,6 +926,7 @@ def set_layout(doc, n, fontsize):
     n = round(pages * pct)
     return pages, n
 
+
 def viewer(path, doc, n=0):
 
     stdscr = curses.initscr()
@@ -1094,6 +1102,7 @@ def viewer(path, doc, n=0):
                 stack = [0] 
             elif char in REFRESH: # Ctrl-R
                 pages, n = set_layout(doc, n, fontsize)
+                clear_screen()
                 mark_all_pages_as_stale(pages)
                 stack = [0]
             elif char == curses.KEY_MOUSE:
@@ -1125,6 +1134,8 @@ def viewer(path, doc, n=0):
 
 def parse_args(args):
     global NVIM_LISTEN_ADDRESS
+    global CITEKEY
+    CITEKEY = None
     if len({"-h", "--help"} & set(args)) != 0:
         hlp = __doc__.rstrip()
         print(hlp)
@@ -1155,6 +1166,9 @@ def parse_args(args):
                 raise SystemExit('no page number specified')
         elif arg in {'--nvim-listen-address'}:
             NVIM_LISTEN_ADDRESS = args[i + 1]
+            skip = True
+        elif arg in {'--citekey'}:
+            CITEKEY = args[i + 1]
             skip = True
         else:
             items = items + [arg]
