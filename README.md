@@ -64,27 +64,29 @@ Or copy it somewhere in your path.
     -   [ ] ODT
     -   [ ] PPTX
     -   [ ] formats from which pandoc can generate html?
--   [ ] Support for encrypted documents
+-   [ ] Support for encrypted documents (should be trivial to add with
+    pymupdf)
 
 ## Commands and Interaction
 
 -   [ ] support command line arguments
     -   [x] --help
     -   [x] --version
-    -   [x] --page-number
--   [ ] open to last-viewed page
+    -   [x] --page-number 
+    -   [x] --first-page
+-   [ ] remember last-viewed page
 -   [ ] vim-style ex-mode
 -   [ ] configuration file
 -   [ ] Open multiple documents at once ("buffers")
 -   [ ] Remote control from other apps
-    -   [ ] msgpack-rpc for interaction with nvim
+    -   [x] msgpack-rpc for interaction with nvim
+        -   [x] send selected text to nvim buffer
+        -   [x] send page number to buffer
+        -   [ ] configurable format for text
+        -   [ ] jump back from nvim to page in text
     -   [ ] SyncTeX support
     -   [ ] jump to page, chapter, annotation, bookmark
     -   [ ] Note-taking integration ala org-noter
--   [ ] OCR
--   [ ] Extract document doi/isbn
-    -   [ ] and add to metadata
-    -   [ ] and pass to external command for fetching reference data
 
 ## Navigation
 
@@ -95,22 +97,20 @@ Or copy it somewhere in your path.
     -   [x] jump to beginning, end of document
 -   [x] navigate via table of contents
     -   [ ] outline folding support
--   [ ] navigate with bookmarks
 -   [ ] Thumbnail mode
     -   [ ] Navigation
     -   [ ] Deleting pages
     -   [ ] Adding pages
     -   [ ] Moving pages within document
     -   [ ] Creating new document from selected pages
--   [x] Follow/fetch urls on page
--   [ ] Follow urls and crossrefs on page via hints mode
+-   [x] Follow/fetch urls and internal links on page
+-   [x] view document metadata
+    -   [ ] edit metadata
 
 ## Image Manipulation
 
--   [x] view document metadata
-    -   [ ] edit metadata
 -   [x] page rotation
-    -   [ ] persistent rotation
+    -   [ ] save rotation to PDF
 -   [x] toggle transparency
 -   [x] invert colors ("dark mode")
 -   [x] toggle tinted background
@@ -118,13 +118,13 @@ Or copy it somewhere in your path.
     -   [x] autocrop margins
     -   [ ] fit to width
     -   [ ] fit to height
-    -   [ ] arbitrary zooming
--   [ ] Reflowing (for ePub and Html)
+    -   [ ] arbitrary zooming 
+    -   [ ] panning
+-   [x] Reflowing (for ePub and Html)
 
 ## Annotations and Editing
 
 -   [ ] Add and edit annotations
--   [ ] Add and navigate with bookmarks
 -   [ ] Fill out forms
     -   [ ] Document signing?
 
@@ -135,9 +135,11 @@ Or copy it somewhere in your path.
     -   [ ] with pretty printing
     -   [ ] with visual and mouse modes
 -   [ ] Keyboard visual mode
+    -   [x] Select by row
     -   [ ] Select by word
     -   [ ] Select by rectangle
-    -   [ ] Copy text selection
+    -   [x] Copy text selection: use the key 'y'
+    -   [x] Send selection to nvim: use the key 'n'
     -   [ ] Copy image selection
     -   [ ] Insert annotation
     -   [ ] Splitting pages
