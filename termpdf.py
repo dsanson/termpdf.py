@@ -62,6 +62,7 @@ from time import sleep, monotonic
 from base64 import standard_b64encode
 from collections import namedtuple
 from math import ceil
+from tempfile import NamedTemporaryFile
 
 URL_BROWSER_LIST = [
     'gnome-open',
@@ -93,6 +94,7 @@ class Document(fitz.Document):
         fitz.Document.__init__(self, filename, None, filetype, rect, width, height, fontsize)
         self.filename = filename
         self.key = None
+        self.layout(rect=fitz.PaperRect('A5'),fontsize=fontsize)
         self.page = 0
         self.prevpage = 0
         self.pages = self.pageCount - 1
@@ -100,6 +102,8 @@ class Document(fitz.Document):
         self.chapter = 0
         self.rotation = 0
         self.fontsize = fontsize
+        self.width = width
+        self.height = height
         self.autocrop = False
         self.alpha = False
         self.invert = False
@@ -202,19 +206,17 @@ class Document(fitz.Document):
 
     def set_layout(self,scr,fontsize=None):
         pct = self.page / (self.pages)
-        w = scr.width
-        h = scr.height
         if fontsize:
             f = fontsize
             self.fontsize = f
         else:
             f = self.fontsize
-        self.layout(width=w,height=h,fontsize=f)
+        self.layout(fitz.PaperRect('A5'), fontsize=f)
+        self.pages = self.pageCount - 1
         self.goto_page(round((self.pages) * pct))
 
     def mark_all_pages_stale(self):
-        for s in self.page_states:
-            s.stale = True
+        self.page_states = [ Page_State(i) for i in range(0,self.pages + 1) ]
 
     def clear_page(self, p):
         cmd = {'a': 'd', 'd': 'a', 'i': p + 1}
@@ -297,12 +299,12 @@ class Document(fitz.Document):
 
         return crop
 
-    def display_page(self, scr, p, display=True):
+    def display_page(self, scr, bar, p, display=True):
         
         page = self.loadPage(p)
         page_state = self.page_states[p]
         
-        if self.autocrop:
+        if self.autocrop and self.isPDF:
             page.setCropBox(page.MediaBox)
             crop = self.auto_crop(page)
             page.setCropBox(crop)
@@ -768,11 +770,7 @@ class status_bar:
     def update(self, doc, scr):
         p = doc.page_to_logical()
         pc = doc.page_to_logical(doc.pages)
-        if pc == doc.pageCount:
-            self.counter = '[{}/{}]'.format(p, pc)
-        else:
-            pf = doc.page_to_logical(0)
-            self.counter = '[{}({}){}]'.format(pf,p,pc)
+        self.counter = '[{}/{}]'.format(p, pc)
         w = self.cols = scr.cols
         cm_w = len(self.cmd)
         co_w = len(self.counter)
@@ -814,6 +812,9 @@ class shortcuts:
 
 # Kitty graphics functions
 
+def detect_support(wait_for=10, silent=False):
+    return write_gr_cmd_with_response(dict(a='q', s=1, v=1, i=1), standard_b64encode(b'abcd'))
+
 def serialize_gr_command(cmd, payload=None):
    cmd = ','.join('{}={}'.format(k, v) for k, v in cmd.items())
    ans = []
@@ -830,6 +831,7 @@ def write_gr_cmd(cmd, payload=None):
     sys.stdout.flush()
 
 def write_gr_cmd_with_response(cmd, payload=None):
+    # rewrite using swallow keys to be nonblocking
     write_gr_cmd(cmd, payload)
     resp = b''
     while resp[-2:] != b'\033\\':
@@ -912,6 +914,10 @@ def parse_args(args):
                 raise SystemExit('No citekey specified')
         elif os.path.isfile(arg):
             files = files + [arg]
+        elif os.path.isfile(arg.strip('\"')):
+            files = files + [arg.strip('\"')]
+        elif os.path.isfile(arg.strip('\'')):
+            files = files + [arg.strip('\'')]
         elif re.match('^-', arg):
             raise SystemExit('Unknown option: ' + arg)
         else:
@@ -1087,6 +1093,12 @@ def view(doc, scr):
     scr.get_size()
     scr.init_curses()
 
+    if not detect_support():
+        raise SystemExit(
+            'Terminal does not support kitty graphics protocol'
+            )
+    scr.swallow_keys()
+
     bar = status_bar()
     if doc.key:
         bar.message = doc.key
@@ -1099,7 +1111,7 @@ def view(doc, scr):
 
         bar.cmd = ''.join(map(chr,stack))
         bar.update(doc, scr)
-        doc.display_page(scr,doc.page)
+        doc.display_page(scr,bar,doc.page)
 
         if count_string == "":
             count = 1
