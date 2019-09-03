@@ -142,6 +142,8 @@ class Document(fitz.Document):
                  'papersize': self.papersize,
                  'page': self.page,
                  'first_page_offset': self.first_page_offset,
+                 'chapter': self.chapter,
+                 'rotation': self.rotation,
                  'autocrop': self.autocrop,
                  'alpha': self.alpha,
                  'invert': self.invert,
@@ -240,16 +242,18 @@ class Document(fitz.Document):
         else:
             return '[{}]'.format(p)
 
-    def set_layout(self,papersize):
+    def set_layout(self,papersize, adjustpage=True):
         pct = self.page / (self.pages)
         sizes = ['a7','c7','b7','a6','c6','b6','a5','c5','b5','a4']
         if papersize > len(sizes) - 1 or papersize < 0:
             return
         p = sizes[papersize]
         self.layout(fitz.PaperRect(p))
-        self.papersize = papersize 
         self.pages = self.pageCount - 1
-        self.goto_page(round((self.pages) * pct))
+        if adjustpage:
+            target = round(self.pages * pct)
+            self.goto_page(target)
+        self.papersize = papersize 
 
     def mark_all_pages_stale(self):
         self.page_states = [ Page_State(i) for i in range(0,self.pages + 1) ]
@@ -848,7 +852,7 @@ class shortcuts:
 
 # Kitty graphics functions
 
-def detect_support(wait_for=10, silent=False):
+def detect_support():
     return write_gr_cmd_with_response(dict(a='q', s=1, v=1, i=1), standard_b64encode(b'abcd'))
 
 def serialize_gr_command(cmd, payload=None):
@@ -1325,8 +1329,8 @@ def main(args=sys.argv):
     if os.path.exists(cachefile):
         with open(cachefile, 'r') as f:
             state = json.load(f)
-    for key in state:
-        setattr(doc, key, state[key])
+        for key in state:
+            setattr(doc, key, state[key])
 
     # load cli settings
     for key in opts:
@@ -1334,6 +1338,9 @@ def main(args=sys.argv):
   
     # normalize page number
     doc.goto_page(doc.page)
+
+    # apply layout settings
+    doc.set_layout(doc.papersize,adjustpage=False)
 
     view(doc, scr) 
 
