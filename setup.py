@@ -9,5 +9,5 @@ setup(name='termpdf.py',
       author_email='dsanson@gmail.com',
       url='https://github.com/dsanson/termpdf.py',
       scripts=['termpdf.py'],
-      requires=['PyMuPDF']
+      requires=['PyMuPDF', 'pyperclip']
      )

@@ -94,7 +94,8 @@ class Document(fitz.Document):
         fitz.Document.__init__(self, filename, None, filetype, rect, width, height, fontsize)
         self.filename = filename
         self.key = None
-        self.layout(rect=fitz.PaperRect('A5'),fontsize=fontsize)
+        self.papersize = 6
+        self.layout(rect=fitz.PaperRect('A6'),fontsize=fontsize)
         self.page = 0
         self.prevpage = 0
         self.pages = self.pageCount - 1
@@ -204,14 +205,14 @@ class Document(fitz.Document):
         else:
             return '[{}]'.format(p)
 
-    def set_layout(self,scr,fontsize=None):
+    def set_layout(self,papersize):
         pct = self.page / (self.pages)
-        if fontsize:
-            f = fontsize
-            self.fontsize = f
-        else:
-            f = self.fontsize
-        self.layout(fitz.PaperRect('A5'), fontsize=f)
+        sizes = ['a7','c7','b7','a6','c6','b6','a5','c5','b5','a4']
+        if papersize > len(sizes) - 1 or papersize < 0:
+            return
+        p = sizes[papersize]
+        self.layout(fitz.PaperRect(p))
+        self.papersize = papersize 
         self.pages = self.pageCount - 1
         self.goto_page(round((self.pages) * pct))
 
@@ -313,7 +314,7 @@ class Document(fitz.Document):
             page.setCropBox(page.MediaBox)
            
         dw = scr.width
-        dh = scr.height - scr.cell_height
+        dh = scr.height # - scr.cell_height
 
         if self.rotation in [0,180]:
             pw = page.bound().width
@@ -430,7 +431,7 @@ class Document(fitz.Document):
                 scr.clear()
                 scr.get_size()
                 scr.init_curses()
-                self.set_layout(scr)
+                self.set_layout(self.papersize)
                 self.mark_all_pages_stale()
                 init_pad(scr,toc)
             elif key in keys.QUIT:
@@ -493,7 +494,7 @@ class Document(fitz.Document):
                 scr.clear()
                 scr.get_size()
                 scr.init_curses()
-                self.set_layout(scr)
+                self.set_layout(self.papersize)
                 self.mark_all_pages_stale()
                 init_pad(scr,meta)
             elif key in keys.QUIT:
@@ -586,7 +587,7 @@ class Document(fitz.Document):
                 scr.clear()
                 scr.get_size()
                 scr.init_curses()
-                self.set_layout(scr)
+                self.set_layout(self.papersize)
                 self.mark_all_pages_stale()
                 init_pad(scr,urls)
             elif key in keys.QUIT:
@@ -804,7 +805,7 @@ class shortcuts:
         self.TOGGLE_ALPHA     = {ord('a')}
         self.TOGGLE_INVERT    = {ord('i')}
         self.TOGGLE_TINT      = {ord('d')}
-        self.INC_FONT         = {ord('+')}
+        self.INC_FONT         = {ord('=')}
         self.DEC_FONT         = {ord('-')}
         self.REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
         self.QUIT             = {3, ord('q')}
@@ -1127,7 +1128,7 @@ def view(doc, scr):
             scr.clear()
             scr.get_size()
             scr.init_curses()
-            doc.set_layout(scr)
+            doc.set_layout(self.papersize)
             doc.mark_all_pages_stale()
 
         elif key == 27:
@@ -1233,13 +1234,13 @@ def view(doc, scr):
             stack = [0]
        
         elif key in keys.INC_FONT:
-            doc.set_layout(scr,doc.fontsize + count * 2)
+            doc.set_layout(doc.papersize - count)
             doc.mark_all_pages_stale()
             count_string = ""
             stack = [0]
         
         elif key in keys.DEC_FONT:
-            doc.set_layout(scr,doc.fontsize - count * 2)
+            doc.set_layout(doc.papersize + count)
             doc.mark_all_pages_stale()
             count_string = ""
             stack = [0]
