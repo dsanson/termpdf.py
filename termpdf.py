@@ -31,13 +31,15 @@ Keys:
     v:              visual mode
     t:              table of contents 
     M:              show metadata
-    u:              list URLs
+    f:              show links on page
     r:              rotate [count] quarter turns clockwise
     R:              rotate [count] quarter turns counterclockwise
     c:              toggle autocropping of margins
     a:              toggle alpha transparency
     i:              invert colors
     d:              darken using TINT_COLOR
+    -:              zoom out (reflowable only)
+    +:              zoom in (reflowable only)
     ctrl-r:         refresh
     q:              quit
 """
@@ -94,7 +96,7 @@ class Document(fitz.Document):
         fitz.Document.__init__(self, filename, None, filetype, rect, width, height, fontsize)
         self.filename = filename
         self.key = None
-        self.papersize = 6
+        self.papersize = 3
         self.layout(rect=fitz.PaperRect('A6'),fontsize=fontsize)
         self.page = 0
         self.prevpage = 0
@@ -535,7 +537,7 @@ class Document(fitz.Document):
             # open external pdf in new buffer
             pass
 
-    def show_urls(self, scr, bar):
+    def show_links(self, scr, bar):
 
         links = self[self.page].getLinks()
 
@@ -592,7 +594,7 @@ class Document(fitz.Document):
                 init_pad(scr,urls)
             elif key in keys.QUIT:
                 clean_exit(self,scr)
-            elif key == 27 or key in keys.SHOW_URLS:
+            elif key == 27 or key in keys.SHOW_LINKS:
                 scr.clear()
                 return
             elif key in keys.NEXT_PAGE:
@@ -794,7 +796,7 @@ class shortcuts:
         self.OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
         self.SHOW_TOC         = {ord('t')}
         self.SHOW_META        = {ord('M')}
-        self.SHOW_URLS        = {ord('u')}
+        self.SHOW_LINKS       = {ord('f')}
         self.TOGGLE_TEXT_MODE = {ord('T')}
         self.ROTATE_CW        = {ord('r')}
         self.ROTATE_CCW       = {ord('R')}
@@ -1128,7 +1130,7 @@ def view(doc, scr):
             scr.clear()
             scr.get_size()
             scr.init_curses()
-            doc.set_layout(self.papersize)
+            doc.set_layout(doc.papersize)
             doc.mark_all_pages_stale()
 
         elif key == 27:
@@ -1223,8 +1225,8 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
         
-        elif key in keys.SHOW_URLS:
-            doc.show_urls(scr,bar)
+        elif key in keys.SHOW_LINKS:
+            doc.show_links(scr,bar)
             count_string = ""
             stack = [0]
 
