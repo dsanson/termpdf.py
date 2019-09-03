@@ -59,6 +59,8 @@ import subprocess
 import zlib
 import shutil
 import select
+import hashlib
+import json
 import pyperclip
 from time import sleep, monotonic
 from base64 import standard_b64encode
@@ -88,6 +90,23 @@ else:
 
 # Class Definitions
 
+def get_filehash(path):
+    blocksize = 65536
+    hasher = hashlib.md5()
+    with open(path, 'rb') as afile:
+        buf = afile.read(blocksize)
+        while len(buf) > 0:
+            hasher.update(buf)
+            buf = afile.read(blocksize)
+    return hasher.hexdigest()
+
+def get_cachefile(path):
+    filehash = get_filehash(path)
+    cachedir = os.path.join(os.getenv("HOME"), '.config', 'termpdf.py', 'cache')
+    os.makedirs(cachedir, exist_ok=True)
+    cachefile = os.path.join(cachedir, filehash)
+    return cachefile
+
 class Document(fitz.Document):
     """
     An extension of the fitz.Document class, with extra attributes
@@ -116,6 +135,20 @@ class Document(fitz.Document):
         self.nvim = None
         self.nvim_listen_address = '/tmp/termpdf_nvim_bridge'
         self.page_states = [ Page_State(i) for i in range(0,self.pages + 1) ]
+
+    def write_state(self):
+        cachefile = get_cachefile(self.filename)
+        state = {'key': self.key,
+                 'papersize': self.papersize,
+                 'page': self.page,
+                 'first_page_offset': self.first_page_offset,
+                 'autocrop': self.autocrop,
+                 'alpha': self.alpha,
+                 'invert': self.invert,
+                 'tint': self.tint,
+                 'note_path': self.note_path}
+        with open(cachefile, 'w') as f:
+            json.dump(state, f)
 
     def goto_page(self, p):
         # store prevpage 
@@ -544,7 +577,7 @@ class Document(fitz.Document):
         urls = [link for link in links if 0 < link['kind'] < 3]
 
         if not urls:
-            bar.message = "No urls on page"
+            bar.message = "No links on page"
             return
 
         self.page_states[self.page].stale = True
@@ -929,7 +962,10 @@ def parse_args(args):
     return files, opts
 
 
-def clean_exit(doc, scr, mes=''):
+def clean_exit(doc, scr, message=''):
+
+    # save current state
+    doc.write_state()
 
     # close curses
     scr.stdscr.keypad(False)
@@ -940,9 +976,7 @@ def clean_exit(doc, scr, mes=''):
     # close the document
     doc.close()
 
-    raise SystemExit(mes)
-
-
+    raise SystemExit(message)
 
 def get_text_in_rows(doc, scr, selection):
     l,t,r,b = doc.page_states[doc.page].place
@@ -1262,6 +1296,8 @@ def view(doc, scr):
             #doc.parse_pagelabels()
             # print(doc[doc.page].firstAnnot)
             # sleep(1)
+            doc.write_state()
+            doc.read_state()
             pass
 
 def main(args=sys.argv):
@@ -1284,6 +1320,15 @@ def main(args=sys.argv):
     except:
         raise SystemExit('Unable to open ' + files[0])
 
+    # load saved settings
+    cachefile = get_cachefile(doc.filename)
+    if os.path.exists(cachefile):
+        with open(cachefile, 'r') as f:
+            state = json.load(f)
+    for key in state:
+        setattr(doc, key, state[key])
+
+    # load cli settings
     for key in opts:
         setattr(doc, key, opts[key])
   
