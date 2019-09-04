@@ -38,14 +38,13 @@ Keys:
     a:              toggle alpha transparency
     i:              invert colors
     d:              darken using TINT_COLOR
+    [count]P:       Set logical page number of current page to count
     -:              zoom out (reflowable only)
     +:              zoom in (reflowable only)
     ctrl-r:         refresh
     q:              quit
 """
 
-KITTYCMD = 'kitty --single-instance --instance-group=1' # open notes in a new OS window
-TINT_COLOR = 'antiquewhite2'
 
 import re
 import array
@@ -68,27 +67,49 @@ from collections import namedtuple
 from math import ceil
 from tempfile import NamedTemporaryFile
 
-URL_BROWSER_LIST = [
-    'gnome-open',
-    'gvfs-open',
-    'xdg-open',
-    'kde-open',
-    'firefox',
-    'w3m',
-    'elinks',
-    'lynx'
-]
-
-URL_BROWSER = None
-if sys.platform == 'darwin':
-    URL_BROWSER = 'open'
-else:
-    for i in URL_BROWSER_LIST:
-        if shutil.which(i) is not None:
-            URL_BROWSER = i
-            break
-
 # Class Definitions
+
+class Config:
+    def __init__(self):
+        self.BIBTEX = ''
+        self.KITTYCMD = 'kitty --single-instance --instance-group=1' # open notes in a new OS window
+        # self.KITTYCMD = 'kitty @ new-window' # open notes in split kitty window
+        self.TINT_COLOR = 'antiquewhite2'
+        self.URL_BROWSER_LIST = [
+            'gnome-open',
+            'gvfs-open',
+            'xdg-open',
+            'kde-open',
+            'firefox',
+            'w3m',
+            'elinks',
+            'lynx'
+        ]
+        self.URL_BROWSER = None
+        self.NOTE_PATH = os.path.join(os.getenv("HOME"), 'inbox.org')
+
+    def browser_detect(self):
+        if sys.platform == 'darwin':
+            self.URL_BROWSER = 'open'
+        else:
+            for i in self.URL_BROWSER_LIST:
+                if shutil.which(i) is not None:
+                    self.URL_BROWSER = i
+                    break
+    
+    def load_config_file(self):
+        config_file = os.path.join(os.getenv('HOME'), '.config', 'termpdf.py', 'config')
+        if os.path.exists(config_file):
+            with open(config_file, 'r') as f:
+                prefs = json.load(f)
+            for key in prefs:
+                setattr(self, key, prefs[key])
+
+# config is global
+config = Config()
+config.load_config_file()
+if not config.URL_BROWSER:
+    config.browser_detect()
 
 def get_filehash(path):
     blocksize = 65536
@@ -114,7 +135,7 @@ class Document(fitz.Document):
     def __init__(self, filename=None, filetype=None, rect=None, width=0, height=0, fontsize=12):
         fitz.Document.__init__(self, filename, None, filetype, rect, width, height, fontsize)
         self.filename = filename
-        self.key = None
+        self.citekey = None
         self.papersize = 3
         self.layout(rect=fitz.PaperRect('A6'),fontsize=fontsize)
         self.page = 0
@@ -130,15 +151,14 @@ class Document(fitz.Document):
         self.alpha = False
         self.invert = False
         self.tint = False
-        self.tint_color = TINT_COLOR
-        self.note_path = 'termpdf_notes.org'
+        self.tint_color = config.TINT_COLOR
         self.nvim = None
         self.nvim_listen_address = '/tmp/termpdf_nvim_bridge'
         self.page_states = [ Page_State(i) for i in range(0,self.pages + 1) ]
 
     def write_state(self):
         cachefile = get_cachefile(self.filename)
-        state = {'key': self.key,
+        state = {'citekey': self.citekey,
                  'papersize': self.papersize,
                  'page': self.page,
                  'first_page_offset': self.first_page_offset,
@@ -147,8 +167,7 @@ class Document(fitz.Document):
                  'autocrop': self.autocrop,
                  'alpha': self.alpha,
                  'invert': self.invert,
-                 'tint': self.tint,
-                 'note_path': self.note_path}
+                 'tint': self.tint}
         with open(cachefile, 'w') as f:
             json.dump(state, f)
 
@@ -235,23 +254,49 @@ class Document(fitz.Document):
             p = self.page
         return p - self.first_page_offset 
 
-    def create_link(self):
-        p = self.logical_page()
-        if self.key:
-            return '[{}, {}]'.format(self.key,p)
+    def make_link(self):
+        p = self.page_to_logical(self.page)
+        if self.citekey: 
+            return '[{}, {}]'.format(self.citekey, p)
         else:
-            return '[{}]'.format(p)
+            return '({}, {}, {})'.format(self.metadata['author'],self.metadata['title'], p)
+
+    def find_target(self, target, target_text):
+        # since our pct calculation is at best an estimate
+        # of the correct target page, we search for the first 
+        # few words of the original page on the surrounding pages
+        # until we find a match
+        for i in [0,1,-1,2,-2,3,-3,4,-4,5,-5,6,-6]:
+            f = target + i
+            match_text = self[f].getText().split()
+            match_text = ' '.join(match_text)
+            if target_text in match_text:
+                return f
+        return target
+
 
     def set_layout(self,papersize, adjustpage=True):
-        pct = self.page / (self.pages)
+        # save a snippet of text from current page
+        target_text = self[self.page].getText().split()
+        if len(target_text) > 6:
+            target_text = ' '.join(target_text[:6])
+        elif len(target_text) > 0:
+            target_text = ' '.join(target_text)
+        else:
+            target_text = ''
+
+        pct = self.page / self.pages
         sizes = ['a7','c7','b7','a6','c6','b6','a5','c5','b5','a4']
-        if papersize > len(sizes) - 1 or papersize < 0:
-            return
+        if papersize > len(sizes) - 1:
+            papersize = len(sizes) - 1
+        elif papersize < 0:
+            papersize = 0
         p = sizes[papersize]
         self.layout(fitz.PaperRect(p))
         self.pages = self.pageCount - 1
         if adjustpage:
-            target = round(self.pages * pct)
+            target = int(self.pages * pct)
+            target = self.find_target(target, target_text)
             self.goto_page(target)
         self.papersize = papersize 
 
@@ -317,13 +362,6 @@ class Document(fitz.Document):
         return text
 
 
-
-    def make_link(self):
-        p = self.page_to_logical(self.page)
-        if self.key: 
-            return '[{}, {}]'.format(self.key, p)
-        else:
-            return '[{}]'.format(p)
 
     def auto_crop(self,page):
         blocks = page.getTextBlocks(images=True)
@@ -491,12 +529,54 @@ class Document(fitz.Document):
                 j += 1
             if index < j:
                 j -= 1
-            
+    
+    def update_metadata_from_bibtex(self):
+        if not self.citekey:
+            return
+        from pybtex.database import parse_string 
+        select = "select {$key "
+        select = select + '\"{}\"'.format(self.citekey)
+        select = select + "}"
+        text = subprocess.run(["bibtool", "-r", "biblatex", "--", select, config.BIBTEX], stdout=subprocess.PIPE, universal_newlines = True)
+        
+        if text.returncode != 0:
+            return
+
+        bib = parse_string(text.stdout,'bibtex')
+        if len(bib.entries) == 0:
+            return
+
+        bib_entry = bib.entries[self.citekey]
+        metadata = self.metadata
+        title = bib_entry.fields['title']
+        title = title.replace('{','')
+        title = title.replace('}','')
+        metadata['title'] = title
+
+        authors = [author for author in bib_entry.persons['author']]
+        if len(authors) == 0:
+            authors = [author for author in bib_entry.persons['editor']]
+        authorNames = ''
+        for author in authors:
+            if authorNames != '':
+                authorNames += ' & '
+            if author.first_names:
+                authorNames += ' '.join(author.first_names) + ' '
+            if author.last_names:
+                authorNames +=  ' '.join(author.last_names)
+
+        metadata['author'] = authorNames
+       
+        if 'Keywords' in bib_entry.fields:
+            metadata['keywords'] = bib_entry.fields['Keywords']
+        
+        self.setMetadata(metadata)
+        self.saveIncr()
+
     def show_meta(self, scr, bar):
 
         meta = self.metadata
         
-
         if not meta:
             bar.message = "No metadata available"
             return
@@ -545,8 +625,12 @@ class Document(fitz.Document):
                 index = min(len(meta) - 1, index + 1)
             elif key in keys.PREV_PAGE:
                 index = max(0, index - 1)
+            elif key in {ord('b')}:
+                self.update_metadata_from_bibtex()
+                meta = self.metadata
+                win,pad,y,x,h,w,span = init_pad(scr,meta)
             elif key in keys.OPEN:
-                # TODO edit metadata, import metadata from bibtex
+                # TODO edit metadata 
                 pass
             
             if index > j + (h - 5):
@@ -566,7 +650,7 @@ class Document(fitz.Document):
         elif kind == 1:
             self.goto_page(link['page'])
         elif kind == 2:
-            subprocess.run([URL_BROWSER, link['uri']], check=True)
+            subprocess.run([config.URL_BROWSER, link['uri']], check=True)
         elif kind == 3:
             # not sure what these are
             pass
@@ -640,7 +724,6 @@ class Document(fitz.Document):
                 index = max(0, index - 1)
             elif key in keys.OPEN:
                 self.goto_link(urls[index])
-                # subprocess.run([URL_BROWSER, urls[index]['uri']], check=True)
                 scr.clear()
                 return
                  
@@ -660,9 +743,9 @@ class Document(fitz.Document):
         try:
             self.nvim = attach('socket', path=self.nvim_listen_address)
         except:
-            ncmd = 'env NVIM_LISTEN_ADDRESS={} nvim {}'.format(self.nvim_listen_address, self.note_path)
+            ncmd = 'env NVIM_LISTEN_ADDRESS={} nvim {}'.format(self.nvim_listen_address, config.NOTE_PATH)
             try:
-                os.system('{} {}'.format(KITTYCMD,ncmd))
+                os.system('{} {}'.format(config.KITTYCMD,ncmd))
             except:
                 raise SystemExit('unable to open new kitty window')
 
@@ -675,16 +758,21 @@ class Document(fitz.Document):
                     # keep trying every tenth of a second
                     sleep(0.1)
 
-    def send_to_neovim(self,text):
+    def send_to_neovim(self,text,append=False):
         try:
-            self.nvim.api.strwidth('are you there?')
+            self.nvim.api.strwidth('testing')
         except: 
             self.init_neovim_bridge()
         if not self.nvim:
             return 
-        line = self.nvim.funcs.line('.')
-        self.nvim.funcs.append(line, text)
-        self.nvim.funcs.cursor(line + len(text), 0)
+        if append:
+            line = self.nvim.funcs.line('$')
+            self.nvim.funcs.append(line, text)
+            self.nvim.funcs.cursor(self.nvim.funcs.line('$'),0)
+        else:
+            line = self.nvim.funcs.line('.')
+            self.nvim.funcs.append(line, text)
+            self.nvim.funcs.cursor(line + len(text), 0)
 
 
 class Page_State:
@@ -839,9 +927,10 @@ class shortcuts:
         self.ROTATE_CCW       = {ord('R')}
         self.VISUAL_MODE      = {ord('v')}
         self.YANK             = {ord('y')}
-        self.SEND_NOTE        = {ord('n')}
+        self.INSERT_NOTE      = {ord('n')}
+        self.APPEND_NOTE      = {ord('a')}
         self.TOGGLE_AUTOCROP  = {ord('c')}
-        self.TOGGLE_ALPHA     = {ord('a')}
+        self.TOGGLE_ALPHA     = {ord('A')}
         self.TOGGLE_INVERT    = {ord('i')}
         self.TOGGLE_TINT      = {ord('d')}
         self.INC_FONT         = {ord('=')}
@@ -948,7 +1037,7 @@ def parse_args(args):
                 raise SystemExit('No address specified')
         elif arg in {'--citekey'}:
             try:
-                opts['key'] = args[i + 1]
+                opts['citekey'] = args[i + 1]
                 skip = True
             except:
                 raise SystemExit('No citekey specified')
@@ -1118,15 +1207,27 @@ def visual_mode(doc,scr,bar):
             bar.message = 'copied'
             return
 
-        elif key in keys.SEND_NOTE:
+        elif key in keys.INSERT_NOTE:
             if selection == [None,None]:
                 selection = [current_row, current_row]
             selection.sort()
             select_text = get_text_in_rows(doc,scr,selection)
-            doc.send_to_neovim(select_text)
+            doc.send_to_neovim(select_text, append=False)
             unhighlight_selection([t,b])
             return
 
+        elif key in keys.APPEND_NOTE:
+            if selection == [None,None]:
+                selection = [current_row, current_row]
+            selection.sort()
+            if doc.citekey:
+                select_text = ['** Notes on ' + doc.citekey]
+            else:
+                select_text = ['** Notes on ' + doc.metadata['title']]
+            select_text += [get_text_in_rows(doc,scr,selection)]
+            doc.send_to_neovim(select_text,append=True)
+            unhighlight_selection([t,b])
+            return
 
 
 def view(doc, scr):
@@ -1141,8 +1242,8 @@ def view(doc, scr):
     scr.swallow_keys()
 
     bar = status_bar()
-    if doc.key:
-        bar.message = doc.key
+    if doc.citekey:
+        bar.message = doc.citekey
 
     count_string = ""
     stack = [0]
@@ -1150,7 +1251,7 @@ def view(doc, scr):
 
     while True:
 
-        bar.cmd = ''.join(map(chr,stack))
+        bar.cmd = ''.join(map(chr,stack[::-1]))
         bar.update(doc, scr)
         doc.display_page(scr,bar,doc.page)
 
@@ -1161,9 +1262,6 @@ def view(doc, scr):
 
         key = scr.stdscr.getch()
 
-        if key in range(48,257): #printable characters
-            stack.append(key)
-        
         if key in keys.REFRESH:
             scr.clear()
             scr.get_size()
@@ -1178,6 +1276,7 @@ def view(doc, scr):
             stack = [0]
 
         elif key in range(48,58): #numerals
+            stack = [key] + stack
             count_string = count_string + chr(key)
 
         elif key in keys.QUIT:
@@ -1290,9 +1389,20 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
 
-        elif key in keys.SEND_NOTE:
+        elif key in keys.INSERT_NOTE:
             text = doc.make_link()
-            doc.send_to_neovim(text)
+            doc.send_to_neovim(text,append=False)
+            count_string = ""
+            stack = [0]
+        
+        elif key in keys.APPEND_NOTE:
+            text = doc.make_link()
+            doc.send_to_neovim(text,append=True)
+            count_string = ""
+            stack = [0]
+
+        elif key in {ord('P')}:
+            doc.first_page_offset = count - doc.page
             count_string = ""
             stack = [0]
 
@@ -1300,9 +1410,11 @@ def view(doc, scr):
             #doc.parse_pagelabels()
             # print(doc[doc.page].firstAnnot)
             # sleep(1)
-            doc.write_state()
-            doc.read_state()
             pass
+
+        elif key in range(48,257): #printable characters
+            stack = [key] + stack
+
 
 def main(args=sys.argv):
 
@@ -1324,7 +1436,7 @@ def main(args=sys.argv):
     except:
         raise SystemExit('Unable to open ' + files[0])
 
-    # load saved settings
+    # load saved file state
     cachefile = get_cachefile(doc.filename)
     if os.path.exists(cachefile):
         with open(cachefile, 'r') as f:

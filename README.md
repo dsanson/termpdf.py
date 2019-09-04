@@ -47,6 +47,10 @@ Now you can run the script in place:
 
 Or copy it somewhere in your path.
 
+Or you can install it with pip:
+
+    pip install .
+
 # Features
 
 ## Document Formats
@@ -74,9 +78,11 @@ Or copy it somewhere in your path.
     -   [x] --version
     -   [x] --page-number 
     -   [x] --first-page
--   [ ] remember last-viewed page
+-   [x] remember last-viewed page and file state
 -   [ ] vim-style ex-mode
 -   [ ] configuration file
+    -   [ ] configurable key mappings
+    -   [x] basic configuration
 -   [ ] Open multiple documents at once ("buffers")
 -   [ ] Remote control from other apps
     -   [x] msgpack-rpc for interaction with nvim
@@ -95,6 +101,9 @@ Or copy it somewhere in your path.
     -   [x] next-chapter, prev-chapter (with counts)
     -   [x] jump to page number
     -   [x] jump to beginning, end of document
+-   [ ] logical page numbers
+    -   [ ] read/write to PDF
+    -   [x] simple page-offset setting
 -   [x] navigate via table of contents
     -   [ ] outline folding support
 -   [ ] Thumbnail mode
@@ -106,6 +115,9 @@ Or copy it somewhere in your path.
 -   [x] Follow/fetch urls and internal links on page
 -   [x] view document metadata
     -   [ ] edit metadata
+    -   [x] update metadata from bibtex (requires that you set a citekey
+            via the cli (`--citekey key`) and that you configure BIBTEX
+            in the config file.
 
 ## Image Manipulation
 
@@ -122,34 +134,42 @@ Or copy it somewhere in your path.
     -   [ ] panning
 -   [x] Reflowing (for ePub and Html)
 
-## Annotations and Editing
+## PDF Manipulation
 
+-   [ ] remove page(s) from PDF
+-   [ ] combine PDFs
+-   [ ] create new PDF from selected pages
+-   [ ] move PDF pages
+-   [ ] split two-up pages
+
+## Notes, Annotations, Forms
+
+-   [x] Send citation and current page number to nvim
+-   [x] Send selected text with page number to nvim
 -   [ ] Add and edit annotations
+-   [ ] Extract annotations to org/markdown
+-   [ ] Apply annotations from org/markdown
 -   [ ] Fill out forms
     -   [ ] Document signing?
 
-## Text, Visual and Mouse modes
+## Visual Mode 
 
--   [ ] Text mode
-    -   [x] basic implementation
-    -   [ ] with pretty printing
-    -   [ ] with visual and mouse modes
 -   [ ] Keyboard visual mode
     -   [x] Select by row
     -   [ ] Select by word
     -   [ ] Select by rectangle
     -   [x] Copy text selection: use the key 'y'
-    -   [x] Send selection to nvim: use the key 'n'
-    -   [ ] Copy image selection
+    -   [x] Insert selection in nvim buffer: use the key 'n'
+    -   [x] Append selection to nvim_note file: use 'a'
+    -   [ ] Copy selected image
+    -   [ ] Crop to selection
     -   [ ] Insert annotation
-    -   [ ] Splitting pages
 -   [ ] Mouse mode
     -   [ ] Select by word
     -   [ ] Select by rectangle
     -   [ ] Copy text selection
     -   [ ] Copy image selection
     -   [ ] Insert annotation
-    -   [ ] Splitting pages
 
 
 

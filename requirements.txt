@@ -1,2 +1,5 @@
 PyMuPDF
+pyperclip
+pybtex
+pynvim
 
