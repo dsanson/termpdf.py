@@ -105,11 +105,120 @@ class Config:
             for key in prefs:
                 setattr(self, key, prefs[key])
 
-# config is global
-config = Config()
-config.load_config_file()
-if not config.URL_BROWSER:
-    config.browser_detect()
+class Buffer:
+    def __init__(self):
+        self.docs = []
+        self.current = 0
+
+    def cycle(self):
+        l = len(self.docs) - 1
+        c = self.current + 1
+        if c > l:
+            c = 0
+        self.current = c
+
+
+class Screen:
+
+    def __init__(self):
+        self.rows = 0
+        self.cols = 0
+        self.width = 0
+        self.height = 0
+        self.cell_width = 0
+        self.cell_height = 0
+        self.stdscr = None
+
+    def get_size(self):
+        fd = sys.stdout
+        buf = array.array('H', [0, 0, 0, 0])
+        fcntl.ioctl(fd, termios.TIOCGWINSZ, buf)
+        r,c,w,h = tuple(buf)
+        cw = w // (c or 1)
+        ch = h // (r or 1)
+        self.rows = r
+        self.cols = c
+        self.width = w
+        self.height = h
+        self.cell_width = cw
+        self.cell_height = ch
+
+    def init_curses(self):
+        os.environ.setdefault('ESCDELAY', '25')
+        self.stdscr = curses.initscr()
+        self.stdscr.clear()
+        curses.noecho()
+        curses.curs_set(0) 
+        curses.mousemask(curses.REPORT_MOUSE_POSITION
+            | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
+            | curses.BUTTON2_PRESSED | curses.BUTTON2_RELEASED
+            | curses.BUTTON3_PRESSED | curses.BUTTON3_RELEASED
+            | curses.BUTTON4_PRESSED | curses.BUTTON4_RELEASED
+            | curses.BUTTON1_CLICKED | curses.BUTTON3_CLICKED
+            | curses.BUTTON1_DOUBLE_CLICKED 
+            | curses.BUTTON1_TRIPLE_CLICKED
+            | curses.BUTTON2_DOUBLE_CLICKED 
+            | curses.BUTTON2_TRIPLE_CLICKED
+            | curses.BUTTON3_DOUBLE_CLICKED 
+            | curses.BUTTON3_TRIPLE_CLICKED
+            | curses.BUTTON4_DOUBLE_CLICKED 
+            | curses.BUTTON4_TRIPLE_CLICKED
+            | curses.BUTTON_SHIFT | curses.BUTTON_ALT
+            | curses.BUTTON_CTRL)
+        self.stdscr.keypad(True) # Handle our own escape codes for now
+
+        # The first call to getch seems to clobber the statusbar.
+        # So we make a dummy first call.
+        self.stdscr.nodelay(True)
+        self.stdscr.getch()
+        self.stdscr.nodelay(False)
+
+    def create_text_win(self, length, header):
+        # calculate dimensions
+        w = max(self.cols - 4, 60)
+        h = self.rows - 2
+        x = int(self.cols / 2 - w / 2)
+        y = 1
+
+        win = curses.newwin(h,w,y,x)
+        win.box()
+        win.addstr(1,2, '{:^{l}}'.format(header, l=(w-3)))
+        
+        self.stdscr.clear()
+        self.stdscr.refresh()
+        win.refresh()
+        pad = curses.newpad(length,1000)
+        pad.keypad(True)
+        
+        return win, pad
+
+    def swallow_keys(self):
+        self.stdscr.nodelay(True)
+        k = self.stdscr.getch()
+        end = monotonic() + 0.1
+        while monotonic() < end:
+            self.stdscr.getch()
+        self.stdscr.nodelay(False)
+
+    def clear(self):
+        sys.stdout.buffer.write('\033[2J'.encode('ascii'))
+
+    def set_cursor(self,c,r):
+        if c > self.cols:
+            c = self.cols
+        elif c < 0:
+            c = 0
+        if r > self.rows:
+            r = self.rows
+        elif r < 0:
+            r = 0
+        sys.stdout.buffer.write('\033[{};{}f'.format(r, c).encode('ascii'))
+
+    def place_string(self,c,r,string):
+        self.set_cursor(c,r)
+        sys.stdout.write(string)
+        sys.stdout.flush()
+
 
 def get_filehash(path):
     blocksize = 65536
@@ -139,6 +248,7 @@ class Document(fitz.Document):
         self.papersize = 3
         self.layout(rect=fitz.PaperRect('A6'),fontsize=fontsize)
         self.page = 0
+        self.logicalpage = 1
         self.prevpage = 0
         self.pages = self.pageCount - 1
         self.first_page_offset = 1
@@ -161,6 +271,7 @@ class Document(fitz.Document):
         state = {'citekey': self.citekey,
                  'papersize': self.papersize,
                  'page': self.page,
+                 'logicalpage': self.logicalpage,
                  'first_page_offset': self.first_page_offset,
                  'chapter': self.chapter,
                  'rotation': self.rotation,
@@ -183,6 +294,7 @@ class Document(fitz.Document):
             self.page = 0
         else:
             self.page = p
+        self.logicalpage = self.page_to_logical(self.page)
     
     def goto_logical_page(self, p):
         p = self.logical_to_page(p)
@@ -257,7 +369,7 @@ class Document(fitz.Document):
     def make_link(self):
         p = self.page_to_logical(self.page)
         if self.citekey: 
-            return '[{}, {}]'.format(self.citekey, p)
+            return '[@{}, {}]'.format(self.citekey, p)
         else:
             return '({}, {}, {})'.format(self.metadata['author'],self.metadata['title'], p)
 
@@ -512,7 +624,7 @@ class Document(fitz.Document):
                 self.mark_all_pages_stale()
                 init_pad(scr,toc)
             elif key in keys.QUIT:
-                clean_exit(self,scr)
+                clean_exit(scr)
             elif key == 27 or key in keys.SHOW_TOC:
                 scr.clear()
                 return
@@ -529,24 +641,14 @@ class Document(fitz.Document):
                 j += 1
             if index < j:
                 j -= 1
-    
+   
     def update_metadata_from_bibtex(self):
         if not self.citekey:
             return
-        from pybtex.database import parse_string 
-        select = "select {$key "
-        select = select + '\"{}\"'.format(self.citekey)
-        select = select + "}"
-        text = subprocess.run(["bibtool", "-r", "biblatex", "--", select, config.BIBTEX], stdout=subprocess.PIPE, universal_newlines = True)
         
-        if text.returncode != 0:
-            return
-
-        bib = parse_string(text.stdout,'bibtex')
-        if len(bib.entries) == 0:
-            return
-
+        bib = bib_from_key([self.citekey])
         bib_entry = bib.entries[self.citekey]
+
         metadata = self.metadata
         title = bib_entry.fields['title']
         title = title.replace('{','')
@@ -571,7 +673,10 @@ class Document(fitz.Document):
             metadata['keywords'] = bib_entry.fields['Keywords']
         
         self.setMetadata(metadata)
-        self.saveIncr()
+        try:
+            self.saveIncr()
+        except:
+            pass
 
     def show_meta(self, scr, bar):
 
@@ -617,7 +722,7 @@ class Document(fitz.Document):
                 self.mark_all_pages_stale()
                 init_pad(scr,meta)
             elif key in keys.QUIT:
-                clean_exit(self,scr)
+                clean_exit(scr)
             elif key == 27 or key in keys.SHOW_META:
                 scr.clear()
                 return
@@ -625,7 +730,7 @@ class Document(fitz.Document):
                 index = min(len(meta) - 1, index + 1)
             elif key in keys.PREV_PAGE:
                 index = max(0, index - 1)
-            elif key in {ord('b')}:
+            elif key in keys.UPDATE_FROM_BIB:
                 self.update_metadata_from_bibtex()
                 meta = self.metadata
                 win,pad,y,x,h,w,span = init_pad(scr,meta)
@@ -655,7 +760,9 @@ class Document(fitz.Document):
             # not sure what these are
             pass
         elif kind == 5:
-            # open external pdf in new buffer
+            path = link['fileSpec']
+            opts = {'page': link['page']}
+            #load_doc(path,opts)
             pass
 
     def show_links(self, scr, bar):
@@ -714,7 +821,7 @@ class Document(fitz.Document):
                 self.mark_all_pages_stale()
                 init_pad(scr,urls)
             elif key in keys.QUIT:
-                clean_exit(self,scr)
+                clean_exit(scr)
             elif key == 27 or key in keys.SHOW_LINKS:
                 scr.clear()
                 return
@@ -783,107 +890,6 @@ class Page_State:
         self.place = (0,0,40,40)
         self.crop = None
 
-class screen:
-
-    def __init__(self):
-        self.rows = 0
-        self.cols = 0
-        self.width = 0
-        self.height = 0
-        self.cell_width = 0
-        self.cell_height = 0
-        self.stdscr = None
-
-    def get_size(self):
-        fd = sys.stdout
-        buf = array.array('H', [0, 0, 0, 0])
-        fcntl.ioctl(fd, termios.TIOCGWINSZ, buf)
-        r,c,w,h = tuple(buf)
-        cw = w // (c or 1)
-        ch = h // (r or 1)
-        self.rows = r
-        self.cols = c
-        self.width = w
-        self.height = h
-        self.cell_width = cw
-        self.cell_height = ch
-
-    def init_curses(self):
-        os.environ.setdefault('ESCDELAY', '25')
-        self.stdscr = curses.initscr()
-        self.stdscr.clear()
-        curses.noecho()
-        curses.curs_set(0) 
-        curses.mousemask(curses.REPORT_MOUSE_POSITION
-            | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
-            | curses.BUTTON2_PRESSED | curses.BUTTON2_RELEASED
-            | curses.BUTTON3_PRESSED | curses.BUTTON3_RELEASED
-            | curses.BUTTON4_PRESSED | curses.BUTTON4_RELEASED
-            | curses.BUTTON1_CLICKED | curses.BUTTON3_CLICKED
-            | curses.BUTTON1_DOUBLE_CLICKED 
-            | curses.BUTTON1_TRIPLE_CLICKED
-            | curses.BUTTON2_DOUBLE_CLICKED 
-            | curses.BUTTON2_TRIPLE_CLICKED
-            | curses.BUTTON3_DOUBLE_CLICKED 
-            | curses.BUTTON3_TRIPLE_CLICKED
-            | curses.BUTTON4_DOUBLE_CLICKED 
-            | curses.BUTTON4_TRIPLE_CLICKED
-            | curses.BUTTON_SHIFT | curses.BUTTON_ALT
-            | curses.BUTTON_CTRL)
-        self.stdscr.keypad(True) # Handle our own escape codes for now
-
-        # The first call to getch seems to clobber the statusbar.
-        # So we make a dummy first call.
-        self.stdscr.nodelay(True)
-        self.stdscr.getch()
-        self.stdscr.nodelay(False)
-
-    def create_text_win(self, length, header):
-        # calculate dimensions
-        w = max(self.cols - 4, 60)
-        h = self.rows - 2
-        x = int(self.cols / 2 - w / 2)
-        y = 1
-
-        win = curses.newwin(h,w,y,x)
-        win.box()
-        win.addstr(1,2, '{:^{l}}'.format(header, l=(w-3)))
-        
-        self.stdscr.clear()
-        self.stdscr.refresh()
-        win.refresh()
-        pad = curses.newpad(length,1000)
-        pad.keypad(True)
-        
-        return win, pad
-
-    def swallow_keys(self):
-        self.stdscr.nodelay(True)
-        k = self.stdscr.getch()
-        end = monotonic() + 0.1
-        while monotonic() < end:
-            self.stdscr.getch()
-        self.stdscr.nodelay(False)
-
-    def clear(self):
-        sys.stdout.buffer.write('\033[2J'.encode('ascii'))
-
-    def set_cursor(self,c,r):
-        if c > self.cols:
-            c = self.cols
-        elif c < 0:
-            c = 0
-        if r > self.rows:
-            r = self.rows
-        elif r < 0:
-            r = 0
-        sys.stdout.buffer.write('\033[{};{}f'.format(r, c).encode('ascii'))
-
-    def place_string(self,c,r,string):
-        self.set_cursor(c,r)
-        sys.stdout.write(string)
-        sys.stdout.flush()
-
 class status_bar:
 
     def __init__(self):
@@ -917,15 +923,18 @@ class shortcuts:
         self.PREV_PAGE        = {ord('k'), curses.KEY_UP}
         self.NEXT_CHAP        = {ord('l'), curses.KEY_RIGHT}
         self.PREV_CHAP        = {ord('h'), curses.KEY_LEFT}
+        self.BUFFER_CYCLE     = {ord('b')}
         self.HINTS            = {ord('f')}
         self.OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
         self.SHOW_TOC         = {ord('t')}
         self.SHOW_META        = {ord('M')}
+        self.UPDATE_FROM_BIB  = {ord('b')}
         self.SHOW_LINKS       = {ord('f')}
         self.TOGGLE_TEXT_MODE = {ord('T')}
         self.ROTATE_CW        = {ord('r')}
         self.ROTATE_CCW       = {ord('R')}
         self.VISUAL_MODE      = {ord('v')}
+        self.SELECT           = {ord('s')}
         self.YANK             = {ord('y')}
         self.INSERT_NOTE      = {ord('n')}
         self.APPEND_NOTE      = {ord('a')}
@@ -933,6 +942,7 @@ class shortcuts:
         self.TOGGLE_ALPHA     = {ord('A')}
         self.TOGGLE_INVERT    = {ord('i')}
         self.TOGGLE_TINT      = {ord('d')}
+        self.SET_PAGE         = {ord('P')}
         self.INC_FONT         = {ord('=')}
         self.DEC_FONT         = {ord('-')}
         self.REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
@@ -983,7 +993,41 @@ def write_chunked(cmd, data):
         write_gr_cmd(cmd, chunk)
         cmd.clear()
 
+# bibtex functions
 
+def bib_from_field(field,regex):
+
+    if shutil.which('bibtool') is not None:
+        from pybtex.database import parse_string 
+        select = "select {" + field + " "
+        select = select + '\"{}\"'.format(regex)
+        select = select + "}"
+        text = subprocess.run(["bibtool", "-r", "biblatex", "--", select, config.BIBTEX], stdout=subprocess.PIPE, universal_newlines = True)
+        if text.returncode != 0:
+            return None
+        bib = parse_string(text.stdout,'bibtex')
+        if len(bib.entries) == 0:
+            return None
+    else:   
+        from pybtex.database import parse_file
+        bib = parse_file(config.BIBTEX,'bibtex')
+
+    return bib
+
+def bib_from_key(citekeys):
+    
+    field = '$key'
+    regex = '\|'.join(citekeys)
+    return bib_from_field(field,regex)
+
+def citekey_from_path(path):
+    
+    path = os.path.basename(path)
+    bib = bib_from_field('File',path)
+
+    if len(bib.entries) == 1:
+        citekey = list(bib.entries)[0]
+        return citekey
 
 # Command line helper functions
 
@@ -1019,7 +1063,7 @@ def parse_args(args):
             skip = not skip
         elif arg in {'-p', '--page-number'}:
             try:
-                opts['page'] = int(args[i + 1]) - 1
+                opts['logicalpage'] = int(args[i + 1])
                 skip = True
             except:
                 raise SystemExit('No valid page number specified')
@@ -1055,19 +1099,19 @@ def parse_args(args):
     return files, opts
 
 
-def clean_exit(doc, scr, message=''):
+def clean_exit(scr, message=''):
 
-    # save current state
-    doc.write_state()
+    for doc in buf.docs:
+        # save current state
+        doc.write_state()
+        # close the document
+        doc.close()
 
     # close curses
     scr.stdscr.keypad(False)
     curses.echo()
     curses.curs_set(1)
     curses.endwin()
-    
-    # close the document
-    doc.close()
 
     raise SystemExit(message)
 
@@ -1149,13 +1193,13 @@ def visual_mode(doc,scr,bar):
             count_string = count_string + chr(key)
 
         elif key in keys.QUIT:
-            clean_exit(doc,scr)
+            clean_exit(scr)
 
         elif key == 27 or key in keys.VISUAL_MODE:
             unhighlight_selection([t,b])
             return
 
-        elif key in {ord('s')}:
+        elif key in keys.SELECT:
             if select:
                 select = False
             else:
@@ -1280,7 +1324,7 @@ def view(doc, scr):
             count_string = count_string + chr(key)
 
         elif key in keys.QUIT:
-            clean_exit(doc, scr)
+            clean_exit(scr)
 
         elif key in keys.GOTO_PAGE:
             if count_string == "":
@@ -1401,8 +1445,19 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
 
-        elif key in {ord('P')}:
+        elif key in keys.SET_PAGE:
             doc.first_page_offset = count - doc.page
+            count_string = ""
+            stack = [0]
+
+        elif key in keys.BUFFER_CYCLE:
+            buf.cycle()
+            doc = buf.docs[buf.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
             count_string = ""
             stack = [0]
 
@@ -1416,12 +1471,21 @@ def view(doc, scr):
             stack = [key] + stack
 
 
+# config is global
+config = Config()
+config.load_config_file()
+if not config.URL_BROWSER:
+    config.browser_detect()
+# buffer is global
+buf = Buffer()
+# screen is global
+scr = Screen()
+
 def main(args=sys.argv):
 
     if not sys.stdin.isatty():
         raise SystemExit('Not an interactive tty')
 
-    scr = screen()
     scr.get_size()
 
     if scr.width == 0:
@@ -1429,27 +1493,36 @@ def main(args=sys.argv):
             'Terminal does not support reporting screen sizes via the TIOCGWINSZ ioctl'
         )
 
-    files, opts = parse_args(args)
-    
-    try:
-        doc = Document(files[0])
-    except:
-        raise SystemExit('Unable to open ' + files[0])
+    paths, opts = parse_args(args)
 
-    # load saved file state
-    cachefile = get_cachefile(doc.filename)
-    if os.path.exists(cachefile):
-        with open(cachefile, 'r') as f:
-            state = json.load(f)
-        for key in state:
-            setattr(doc, key, state[key])
+    for path in paths:
+        try:
+            doc = Document(path)
+        except:
+            raise SystemExit('Unable to open ' + files[0])
+
+        # load saved file state
+        cachefile = get_cachefile(doc.filename)
+        if os.path.exists(cachefile):
+            with open(cachefile, 'r') as f:
+                state = json.load(f)
+            for key in state:
+                setattr(doc, key, state[key])
+        buf.docs += [doc]
+
+    for doc in buf.docs:
+        if not doc.citekey:
+            doc.citekey = citekey_from_path(doc.filename)
+
+
+    doc = buf.docs[buf.current]
 
     # load cli settings
     for key in opts:
         setattr(doc, key, opts[key])
-  
+
     # normalize page number
-    doc.goto_page(doc.page)
+    doc.goto_logical_page(doc.logicalpage)
 
     # apply layout settings
     doc.set_layout(doc.papersize,adjustpage=False)
