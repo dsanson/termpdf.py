@@ -1018,6 +1018,7 @@ def bib_from_key(citekeys):
     
     field = '$key'
     regex = '\|'.join(citekeys)
+    regex = '^' + regex + '$'
     return bib_from_field(field,regex)
 
 def citekey_from_path(path):
@@ -1028,6 +1029,19 @@ def citekey_from_path(path):
     if len(bib.entries) == 1:
         citekey = list(bib.entries)[0]
         return citekey
+
+def path_from_citekey(citekey):
+    bib = bib_from_key([citekey])
+    if len(bib.entries) == 1:
+        try:
+            paths = bib.entries[citekey].fields["File"]
+        except:
+            raise SystemExit('No file for ' + citekey)
+        paths = paths.split(';')
+        paths = [path for path in paths if path[-4:] == '.pdf']
+        if len(paths) != 0:
+            return paths[0]
+    return None
 
 # Command line helper functions
 
@@ -1050,6 +1064,7 @@ def parse_args(args):
     opts = {} 
     if len(args) == 1:
         args = args + ['-h']
+
     args = args[1:]
 
     if len({'-h', '--help'} & set(args)) != 0:
@@ -1085,6 +1100,18 @@ def parse_args(args):
                 skip = True
             except:
                 raise SystemExit('No citekey specified')
+        elif arg in {'-o', '--open'}:
+            try:
+                citekey = args[i+1]
+            except:
+                raise SystemExit('No citekey specified')
+            opts['citekey'] = citekey
+            path = path_from_citekey(citekey)
+            if path:
+                files += [path]
+            else:
+                raise SystemExit('No file for ' + citekey) 
+            skip = True
         elif os.path.isfile(arg):
             files = files + [arg]
         elif os.path.isfile(arg.strip('\"')):
@@ -1513,7 +1540,6 @@ def main(args=sys.argv):
     for doc in buf.docs:
         if not doc.citekey:
             doc.citekey = citekey_from_path(doc.filename)
-
 
     doc = buf.docs[buf.current]
 
