@@ -28,6 +28,7 @@ Keys:
     gg:             go to beginning of document
     G:              go to end of document
     [count]G:       go to page [count]
+    b:		    cycle through open documents
     v:              visual mode
     t:              table of contents 
     M:              show metadata
@@ -1026,7 +1027,7 @@ def citekey_from_path(path):
     path = os.path.basename(path)
     bib = bib_from_field('File',path)
 
-    if len(bib.entries) == 1:
+    if bib and len(bib.entries) == 1:
         citekey = list(bib.entries)[0]
         return citekey
 
@@ -1273,6 +1274,7 @@ def visual_mode(doc,scr,bar):
                 selection = [current_row, current_row]
             selection.sort()
             select_text = get_text_in_rows(doc,scr,selection)
+            select_text = '> ' + select_text
             pyperclip.copy(select_text)
             unhighlight_selection([t,b])
             bar.message = 'copied'
@@ -1283,6 +1285,7 @@ def visual_mode(doc,scr,bar):
                 selection = [current_row, current_row]
             selection.sort()
             select_text = get_text_in_rows(doc,scr,selection)
+            select_text = '> ' + select_text
             doc.send_to_neovim(select_text, append=False)
             unhighlight_selection([t,b])
             return
@@ -1291,11 +1294,11 @@ def visual_mode(doc,scr,bar):
             if selection == [None,None]:
                 selection = [current_row, current_row]
             selection.sort()
+            note_header = ' Notes on {}, {}'.format(doc.metadata['author'], doc.metadata['title'])
             if doc.citekey:
-                select_text = ['** Notes on ' + doc.citekey]
-            else:
-                select_text = ['** Notes on ' + doc.metadata['title']]
-            select_text += [get_text_in_rows(doc,scr,selection)]
+                note_header = doc.citekey + note_header
+            select_text = ['## ' + note_header] 
+            select_text +=   ['> ' + get_text_in_rows(doc,scr,selection)]
             doc.send_to_neovim(select_text,append=True)
             unhighlight_selection([t,b])
             return
