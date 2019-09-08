@@ -434,7 +434,7 @@ class Document(fitz.Document):
         cmd = {'a': 'd', 'd': 'a', 'i': p + 1}
         write_gr_cmd(cmd)
 
-    def cells_to_pixels(self, scr, *coords):
+    def cells_to_pixels(self, *coords):
         factor = self.page_states[self.page].factor
         l,t,_,_ = self.page_states[self.page].place
         pix_coords = []
@@ -446,7 +446,7 @@ class Document(fitz.Document):
             pix_coords.append((x,y))
         return pix_coords
 
-    def pixels_to_cells(self, scr, *coords):
+    def pixels_to_cells(self, *coords):
         factor = self.page_states[self.page].factor
         l,t,_,_ = self.page_states[self.page].place
         cell_coords = []
@@ -504,7 +504,7 @@ class Document(fitz.Document):
 
         return crop
 
-    def display_page(self, scr, bar, p, display=True):
+    def display_page(self, bar, p, display=True):
         
         page = self.loadPage(p)
         page_state = self.page_states[p]
@@ -589,13 +589,13 @@ class Document(fitz.Document):
             if not success:
                 self.page_states[p].stale = True
                 bar.message = 'failed to load page ' + str(p+1)
-                bar.update(self,scr)
+                bar.update(self)
 
         self.page_states[p].stale = False 
 
         scr.swallow_keys()
 
-    def show_toc(self, scr, bar):
+    def show_toc(self, bar):
 
         toc = self.getToC()
 
@@ -607,7 +607,7 @@ class Document(fitz.Document):
         self.clear_page(self.page)
         scr.clear()
         
-        def init_pad(scr,toc):
+        def init_pad(toc):
             win, pad = scr.create_text_win(len(toc), 'Table of Contents')
             y,x = win.getbegyx()
             h,w = win.getmaxyx()
@@ -618,7 +618,7 @@ class Document(fitz.Document):
                 span.append(len(text))
             return win,pad,y,x,h,w,span
 
-        win,pad,y,x,h,w,span = init_pad(scr,toc)
+        win,pad,y,x,h,w,span = init_pad(toc)
 
         keys = shortcuts()
         index = self.current_chap()
@@ -637,7 +637,7 @@ class Document(fitz.Document):
                 scr.init_curses()
                 self.set_layout(self.papersize)
                 self.mark_all_pages_stale()
-                init_pad(scr,toc)
+                init_pad(toc)
             elif key in keys.QUIT:
                 clean_exit()
             elif key == 27 or key in keys.SHOW_TOC:
@@ -693,7 +693,7 @@ class Document(fitz.Document):
         except:
             pass
 
-    def show_meta(self, scr, bar):
+    def show_meta(self, bar):
 
         meta = self.metadata
         
@@ -705,7 +705,7 @@ class Document(fitz.Document):
         self.clear_page(self.page)
         scr.clear()
         
-        def init_pad(scr,metadata):
+        def init_pad(metadata):
             win, pad = scr.create_text_win(len(meta), 'Metadata')
             y,x = win.getbegyx()
             h,w = win.getmaxyx()
@@ -716,7 +716,7 @@ class Document(fitz.Document):
                 span.append(len(text))
             return win,pad,y,x,h,w,span
 
-        win,pad,y,x,h,w,span = init_pad(scr,meta)
+        win,pad,y,x,h,w,span = init_pad(meta)
 
         keys = shortcuts()
         index = 0
@@ -735,7 +735,7 @@ class Document(fitz.Document):
                 scr.init_curses()
                 self.set_layout(self.papersize)
                 self.mark_all_pages_stale()
-                init_pad(scr,meta)
+                init_pad(meta)
             elif key in keys.QUIT:
                 clean_exit()
             elif key == 27 or key in keys.SHOW_META:
@@ -748,7 +748,7 @@ class Document(fitz.Document):
             elif key in keys.UPDATE_FROM_BIB:
                 self.update_metadata_from_bibtex()
                 meta = self.metadata
-                win,pad,y,x,h,w,span = init_pad(scr,meta)
+                win,pad,y,x,h,w,span = init_pad(meta)
             elif key in keys.OPEN:
                 # TODO edit metadata 
                 pass
@@ -780,7 +780,7 @@ class Document(fitz.Document):
             #load_doc(path,opts)
             pass
 
-    def show_links(self, scr, bar):
+    def show_links(self, bar):
 
         links = self[self.page].getLinks()
 
@@ -794,7 +794,7 @@ class Document(fitz.Document):
         self.clear_page(self.page)
         scr.clear()
         
-        def init_pad(scr,urls):
+        def init_pad(urls):
             win, pad = scr.create_text_win(len(urls), 'URLs')
             y,x = win.getbegyx()
             h,w = win.getmaxyx()
@@ -815,7 +815,7 @@ class Document(fitz.Document):
                 span.append(len(text))
             return win,pad,y,x,h,w,span
 
-        win,pad,y,x,h,w,span = init_pad(scr,urls)
+        win,pad,y,x,h,w,span = init_pad(urls)
 
         keys = shortcuts()
         index = 0
@@ -834,7 +834,7 @@ class Document(fitz.Document):
                 scr.init_curses()
                 self.set_layout(self.papersize)
                 self.mark_all_pages_stale()
-                init_pad(scr,urls)
+                init_pad(urls)
             elif key in keys.QUIT:
                 clean_exit()
             elif key == 27 or key in keys.SHOW_LINKS:
@@ -854,7 +854,7 @@ class Document(fitz.Document):
             if index < j:
                 j -= 1
     
-    def view_text(self, scr):
+    def view_text(self):
         pass
 
     def init_neovim_bridge(self):
@@ -916,7 +916,7 @@ class status_bar:
         self.format = '{} {:^{me_w}} {}'
         self.bar = ''
 
-    def update(self, doc, scr):
+    def update(self, doc):
         p = doc.page_to_logical()
         pc = doc.page_to_logical(doc.pages)
         self.counter = '[{}/{}]'.format(p, pc)
@@ -1158,11 +1158,11 @@ def clean_exit(message=''):
 
     raise SystemExit(message)
 
-def get_text_in_rows(doc, scr, selection):
+def get_text_in_rows(doc, selection):
     l,t,r,b = doc.page_states[doc.page].place
     top = (l,t + selection[0] - 1)
     bottom = (r,t + selection[1])
-    top_pix, bottom_pix = doc.cells_to_pixels(scr,top,bottom)
+    top_pix, bottom_pix = doc.cells_to_pixels(top,bottom)
     rect = fitz.Rect(top_pix, bottom_pix)
     select_text = doc.get_text_in_Rect(rect)
     link = doc.make_link()
@@ -1217,7 +1217,7 @@ def visual_mode(doc,bar):
     while True:
        
         bar.cmd = count_string
-        bar.update(doc,scr)
+        bar.update(doc)
         unhighlight_selection([t,b])
         if select:
             highlight_selection(selection,color='blue')
@@ -1288,7 +1288,7 @@ def visual_mode(doc,bar):
             if selection == [None,None]:
                 selection = [current_row, current_row]
             selection.sort()
-            select_text = get_text_in_rows(doc,scr,selection)
+            select_text = get_text_in_rows(doc,selection)
             select_text = '> ' + select_text
             pyperclip.copy(select_text)
             unhighlight_selection([t,b])
@@ -1299,7 +1299,7 @@ def visual_mode(doc,bar):
             if selection == [None,None]:
                 selection = [current_row, current_row]
             selection.sort()
-            select_text = get_text_in_rows(doc,scr,selection)
+            select_text = get_text_in_rows(doc,selection)
             select_text = '> ' + select_text
             doc.send_to_neovim(select_text, append=False)
             unhighlight_selection([t,b])
@@ -1313,13 +1313,13 @@ def visual_mode(doc,bar):
             if doc.citekey:
                 note_header = doc.citekey + note_header
             select_text = ['## ' + note_header] 
-            select_text +=   ['> ' + get_text_in_rows(doc,scr,selection)]
+            select_text +=   ['> ' + get_text_in_rows(doc,selection)]
             doc.send_to_neovim(select_text,append=True)
             unhighlight_selection([t,b])
             return
 
 
-def view(doc, scr):
+def view(doc):
 
     scr.get_size()
     scr.init_curses()
@@ -1341,8 +1341,8 @@ def view(doc, scr):
     while True:
 
         bar.cmd = ''.join(map(chr,stack[::-1]))
-        bar.update(doc, scr)
-        doc.display_page(scr,bar,doc.page)
+        bar.update(doc )
+        doc.display_page(bar,doc.page)
 
         if count_string == "":
             count = 1
@@ -1351,7 +1351,10 @@ def view(doc, scr):
 
         key = scr.stdscr.getch()
 
-        if key in keys.REFRESH:
+        if key == -1:
+            pass
+
+        elif key in keys.REFRESH:
             scr.clear()
             scr.get_size()
             scr.init_curses()
@@ -1407,7 +1410,6 @@ def view(doc, scr):
                 bar.message = doc.citekey
             count_string = ""
             stack = [0]
-
 
         elif key in range(48,58): #numerals
             stack = [key] + stack
@@ -1487,22 +1489,22 @@ def view(doc, scr):
             stack = [0]
 
         elif key in keys.SHOW_TOC:
-            doc.show_toc(scr,bar)
+            doc.show_toc(bar)
             count_string = ""
             stack = [0]
 
         elif key in keys.SHOW_META:
-            doc.show_meta(scr,bar)
+            doc.show_meta(bar)
             count_string = ""
             stack = [0]
         
         elif key in keys.SHOW_LINKS:
-            doc.show_links(scr,bar)
+            doc.show_links(bar)
             count_string = ""
             stack = [0]
 
         elif key in keys.TOGGLE_TEXT_MODE:
-            doc.view_text(scr)
+            doc.view_text()
             count_string = ""
             stack = [0]
        
@@ -1539,34 +1541,8 @@ def view(doc, scr):
             doc.first_page_offset = count - doc.page
             count_string = ""
             stack = [0]
-    
-        elif stack[0] in keys.BUFFER_CYCLE and key in keys.BUFFER_CYCLE:
-            bufs.cycle(count)
-            doc = bufs.docs[bufs.current]
-            doc.goto_logical_page(doc.logicalpage)
-            doc.set_layout(doc.papersize,adjustpage=False)
-            doc.mark_all_pages_stale()
-            if doc.citekey:
-                bar.message = doc.citekey
-            count_string = ""
-            stack = [0]
-
-        elif key in keys.BUFFER_CYCLE_REV:
-            bufs.cycle(-count)
-            doc = bufs.docs[bufs.current]
-            doc.goto_logical_page(doc.logicalpage)
-            doc.set_layout(doc.papersize,adjustpage=False)
-            doc.mark_all_pages_stale()
-            if doc.citekey:
-                bar.message = doc.citekey
-            count_string = ""
-            stack = [0]
-
 
         elif key in keys.DEBUG:
-            #doc.parse_pagelabels()
-            # print(doc[doc.page].firstAnnot)
-            # sleep(1)
             pass
 
         elif key in range(48,257): #printable characters
@@ -1628,7 +1604,7 @@ def main(args=sys.argv):
     # apply layout settings
     doc.set_layout(doc.papersize,adjustpage=False)
 
-    view(doc, scr) 
+    view(doc) 
 
 if __name__ == '__main__':
     main()
