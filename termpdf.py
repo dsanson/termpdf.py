@@ -518,7 +518,7 @@ class Document(fitz.Document):
             page.setCropBox(page.MediaBox)
            
         dw = scr.width
-        dh = scr.height # - scr.cell_height
+        dh = scr.height - scr.cell_height
 
         if self.rotation in [0,180]:
             pw = page.bound().width
