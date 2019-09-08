@@ -398,7 +398,7 @@ class Document(fitz.Document):
         else:
             target_text = ''
 
-        pct = self.page / self.pages
+        pct = (self.page + 1) / (self.pages + 1)
         sizes = ['a7','c7','b7','a6','c6','b6','a5','c5','b5','a4']
         if papersize > len(sizes) - 1:
             papersize = len(sizes) - 1
@@ -408,7 +408,7 @@ class Document(fitz.Document):
         self.layout(fitz.PaperRect(p))
         self.pages = self.pageCount - 1
         if adjustpage:
-            target = int(self.pages * pct)
+            target = int((self.pages + 1) * pct) - 1
             target = self.find_target(target, target_text)
             self.goto_page(target)
         self.papersize = papersize 
@@ -1156,7 +1156,7 @@ def get_text_in_rows(doc, scr, selection):
 
 # Viewer functions
 
-def visual_mode(doc,scr,bar):
+def visual_mode(doc,bar):
     l,t,r,b = doc.page_states[doc.page].place
     
     width = (r - l) + 1
@@ -1459,7 +1459,7 @@ def view(doc, scr):
             stack = [0]
 
         elif key in keys.VISUAL_MODE:
-            visual_mode(doc,scr,bar)
+            visual_mode(doc,bar)
             count_string = ""
             stack = [0]
 
