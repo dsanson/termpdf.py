@@ -1386,6 +1386,27 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
 
+        elif stack[0] in keys.buffer_cycle and key in keys.buffer_cycle:
+            bufs.cycle(count)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=false)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
+
+        elif key in keys.buffer_cycle_rev:
+            bufs.cycle(-count)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=false)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
 
         elif key in range(48,58): #numerals
             stack = [key] + stack
@@ -1519,9 +1540,9 @@ def view(doc, scr):
             stack = [0]
     
 
-        elif key in keys.DEBUG:
+        elif key in keys.debug:
             #doc.parse_pagelabels()
-            # print(doc[doc.page].firstAnnot)
+            # print(doc[doc.page].firstannot)
             # sleep(1)
             pass
 
@@ -1530,14 +1551,14 @@ def view(doc, scr):
 
 
 # config is global
-config = Config()
+config = config()
 config.load_config_file()
-if not config.URL_BROWSER:
+if not config.url_browser:
     config.browser_detect()
 # buffers list is global
-bufs = Buffers()
+bufs = buffers()
 # screen is global
-scr = Screen()
+scr = screen()
 
 def main(args=sys.argv):
 
