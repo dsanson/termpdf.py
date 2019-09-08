@@ -111,13 +111,27 @@ class Buffers:
         self.docs = []
         self.current = 0
 
-    def cycle(self):
+    def goto_buffer(self,n):
         l = len(self.docs) - 1
-        c = self.current + 1
+        if n > l:
+            n = l
+        elif n < 0:
+            n = 0
+        self.current = n
+
+    def cycle(self, count):
+        l = len(self.docs) - 1
+        c = self.current + count 
         if c > l:
             c = 0
         self.current = c
 
+    def close_buffer(self,n):
+        del self.docs[n]
+        if self.current == n:
+            self.current = max(0,n-1)
+        if len(self.docs) == 0:
+            clean_exit()
 
 class Screen:
 
@@ -625,7 +639,7 @@ class Document(fitz.Document):
                 self.mark_all_pages_stale()
                 init_pad(scr,toc)
             elif key in keys.QUIT:
-                clean_exit(scr)
+                clean_exit()
             elif key == 27 or key in keys.SHOW_TOC:
                 scr.clear()
                 return
@@ -723,7 +737,7 @@ class Document(fitz.Document):
                 self.mark_all_pages_stale()
                 init_pad(scr,meta)
             elif key in keys.QUIT:
-                clean_exit(scr)
+                clean_exit()
             elif key == 27 or key in keys.SHOW_META:
                 scr.clear()
                 return
@@ -822,7 +836,7 @@ class Document(fitz.Document):
                 self.mark_all_pages_stale()
                 init_pad(scr,urls)
             elif key in keys.QUIT:
-                clean_exit(scr)
+                clean_exit()
             elif key == 27 or key in keys.SHOW_LINKS:
                 scr.clear()
                 return
@@ -925,6 +939,7 @@ class shortcuts:
         self.NEXT_CHAP        = {ord('l'), curses.KEY_RIGHT}
         self.PREV_CHAP        = {ord('h'), curses.KEY_LEFT}
         self.BUFFER_CYCLE     = {ord('b')}
+        self.BUFFER_CYCLE_REV = {ord('B')}
         self.HINTS            = {ord('f')}
         self.OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
         self.SHOW_TOC         = {ord('t')}
@@ -1127,7 +1142,7 @@ def parse_args(args):
     return files, opts
 
 
-def clean_exit(scr, message=''):
+def clean_exit(message=''):
 
     for doc in bufs.docs:
         # save current state
@@ -1221,7 +1236,7 @@ def visual_mode(doc,bar):
             count_string = count_string + chr(key)
 
         elif key in keys.QUIT:
-            clean_exit(scr)
+            clean_exit()
 
         elif key == 27 or key in keys.VISUAL_MODE:
             unhighlight_selection([t,b])
@@ -1349,12 +1364,35 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
 
+        elif stack[0] in keys.BUFFER_CYCLE and key in range(48,58):
+            bufs.goto_buffer(int(chr(key)) - 1)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
+
+        elif stack[0] in keys.BUFFER_CYCLE and key == ord('d'):
+            bufs.close_buffer(bufs.current)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
+
+
         elif key in range(48,58): #numerals
             stack = [key] + stack
             count_string = count_string + chr(key)
 
         elif key in keys.QUIT:
-            clean_exit(scr)
+            clean_exit()
 
         elif key in keys.GOTO_PAGE:
             if count_string == "":
@@ -1479,17 +1517,7 @@ def view(doc, scr):
             doc.first_page_offset = count - doc.page
             count_string = ""
             stack = [0]
-
-        elif key in keys.BUFFER_CYCLE:
-            bufs.cycle()
-            doc = bufs.docs[bufs.current]
-            doc.goto_logical_page(doc.logicalpage)
-            doc.set_layout(doc.papersize,adjustpage=False)
-            doc.mark_all_pages_stale()
-            if doc.citekey:
-                bar.message = doc.citekey
-            count_string = ""
-            stack = [0]
+    
 
         elif key in keys.DEBUG:
             #doc.parse_pagelabels()
