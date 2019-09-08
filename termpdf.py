@@ -1386,27 +1386,28 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
 
-        elif stack[0] in keys.buffer_cycle and key in keys.buffer_cycle:
+        elif stack[0] in keys.BUFFER_CYCLE and key in keys.BUFFER_CYCLE:
             bufs.cycle(count)
             doc = bufs.docs[bufs.current]
             doc.goto_logical_page(doc.logicalpage)
-            doc.set_layout(doc.papersize,adjustpage=false)
+            doc.set_layout(doc.papersize,adjustpage=False)
             doc.mark_all_pages_stale()
             if doc.citekey:
                 bar.message = doc.citekey
             count_string = ""
             stack = [0]
 
-        elif key in keys.buffer_cycle_rev:
+        elif key in keys.BUFFER_CYCLE_REV:
             bufs.cycle(-count)
             doc = bufs.docs[bufs.current]
             doc.goto_logical_page(doc.logicalpage)
-            doc.set_layout(doc.papersize,adjustpage=false)
+            doc.set_layout(doc.papersize,adjustpage=False)
             doc.mark_all_pages_stale()
             if doc.citekey:
                 bar.message = doc.citekey
             count_string = ""
             stack = [0]
+
 
         elif key in range(48,58): #numerals
             stack = [key] + stack
@@ -1539,10 +1540,32 @@ def view(doc, scr):
             count_string = ""
             stack = [0]
     
+        elif stack[0] in keys.BUFFER_CYCLE and key in keys.BUFFER_CYCLE:
+            bufs.cycle(count)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
 
-        elif key in keys.debug:
+        elif key in keys.BUFFER_CYCLE_REV:
+            bufs.cycle(-count)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
+
+
+        elif key in keys.DEBUG:
             #doc.parse_pagelabels()
-            # print(doc[doc.page].firstannot)
+            # print(doc[doc.page].firstAnnot)
             # sleep(1)
             pass
 
@@ -1551,14 +1574,14 @@ def view(doc, scr):
 
 
 # config is global
-config = config()
+config = Config()
 config.load_config_file()
-if not config.url_browser:
+if not config.URL_BROWSER:
     config.browser_detect()
 # buffers list is global
-bufs = buffers()
+bufs = Buffers()
 # screen is global
-scr = screen()
+scr = Screen()
 
 def main(args=sys.argv):
 
