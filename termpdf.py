@@ -106,7 +106,7 @@ class Config:
             for key in prefs:
                 setattr(self, key, prefs[key])
 
-class Buffer:
+class Buffers:
     def __init__(self):
         self.docs = []
         self.current = 0
@@ -1129,7 +1129,7 @@ def parse_args(args):
 
 def clean_exit(scr, message=''):
 
-    for doc in buf.docs:
+    for doc in bufs.docs:
         # save current state
         doc.write_state()
         # close the document
@@ -1481,8 +1481,8 @@ def view(doc, scr):
             stack = [0]
 
         elif key in keys.BUFFER_CYCLE:
-            buf.cycle()
-            doc = buf.docs[buf.current]
+            bufs.cycle()
+            doc = bufs.docs[bufs.current]
             doc.goto_logical_page(doc.logicalpage)
             doc.set_layout(doc.papersize,adjustpage=False)
             doc.mark_all_pages_stale()
@@ -1506,8 +1506,8 @@ config = Config()
 config.load_config_file()
 if not config.URL_BROWSER:
     config.browser_detect()
-# buffer is global
-buf = Buffer()
+# buffers list is global
+bufs = Buffers()
 # screen is global
 scr = Screen()
 
@@ -1538,13 +1538,13 @@ def main(args=sys.argv):
                 state = json.load(f)
             for key in state:
                 setattr(doc, key, state[key])
-        buf.docs += [doc]
+        bufs.docs += [doc]
 
-    for doc in buf.docs:
+    for doc in bufs.docs:
         if not doc.citekey:
             doc.citekey = citekey_from_path(doc.filename)
 
-    doc = buf.docs[buf.current]
+    doc = bufs.docs[bufs.current]
 
     # load cli settings
     for key in opts:
