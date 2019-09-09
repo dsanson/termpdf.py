@@ -488,7 +488,13 @@ class Document(fitz.Document):
             text = text + [" ".join(w[4] for w in gwords)]
         return text
 
-
+    def search_text(self,string):
+        for p in range(self.page,self.pages):
+            page_text = self.getPageText(p, 'text')
+            if re.search(string,page_text):
+                self.goto_page(p)
+                return "match on page"
+        return "no matches"
 
     def auto_crop(self,page):
         blocks = page.getTextBlocks(images=True)
@@ -949,8 +955,8 @@ class shortcuts:
         self.TOGGLE_TEXT_MODE = {ord('T')}
         self.ROTATE_CW        = {ord('r')}
         self.ROTATE_CCW       = {ord('R')}
-        self.VISUAL_MODE      = {ord('v')}
-        self.SELECT           = {ord('s')}
+        self.VISUAL_MODE      = {ord('s')}
+        self.SELECT           = {ord('v')}
         self.YANK             = {ord('y')}
         self.INSERT_NOTE      = {ord('n')}
         self.APPEND_NOTE      = {ord('a')}
@@ -1318,7 +1324,6 @@ def visual_mode(doc,bar):
             unhighlight_selection([t,b])
             return
 
-
 def view(doc):
 
     scr.get_size()
@@ -1541,6 +1546,15 @@ def view(doc):
             doc.first_page_offset = count - doc.page
             count_string = ""
             stack = [0]
+        
+        elif key == ord('/'):
+            scr.place_string(1,scr.rows,"/")
+            curses.echo()
+            scr.set_cursor(2,scr.rows)
+            s = scr.stdscr.getstr()
+            search_text = s.decode('utf-8')
+            curses.noecho()
+            bar.message = doc.search_text(search_text)
 
         elif key in keys.DEBUG:
             pass
