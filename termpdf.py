@@ -942,6 +942,7 @@ class shortcuts:
         self.GOTO             = {ord('g')}
         self.NEXT_PAGE        = {ord('j'), curses.KEY_DOWN, ord(' ')}
         self.PREV_PAGE        = {ord('k'), curses.KEY_UP}
+        self.GO_BACK          = {ord('p')}
         self.NEXT_CHAP        = {ord('l'), curses.KEY_RIGHT}
         self.PREV_CHAP        = {ord('h'), curses.KEY_LEFT}
         self.BUFFER_CYCLE     = {ord('b')}
@@ -1443,6 +1444,11 @@ def view(doc):
 
         elif key in keys.PREV_PAGE:
             doc.prev_page(count)
+            count_string = ""
+            stack = [0]
+
+        elif key in keys.GO_BACK:
+            doc.goto_page(doc.prevpage)
             count_string = ""
             stack = [0]
 
