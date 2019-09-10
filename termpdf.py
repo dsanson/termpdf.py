@@ -1062,7 +1062,9 @@ def path_from_citekey(citekey):
         except:
             raise SystemExit('No file for ' + citekey)
         paths = paths.split(';')
-        paths = [path for path in paths if path[-4:] == '.pdf']
+        exts = ['.pdf', '.xps', '.cbz', '.fb2' ]
+        extsf = ['.epub', '.oxps' ]
+        paths = [path for path in paths if path[-4:] in exts or path[-5:] in extsf]
         if len(paths) != 0:
             return paths[0]
     return None
