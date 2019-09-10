@@ -1310,8 +1310,11 @@ def visual_mode(doc,bar):
             if selection == [None,None]:
                 selection = [current_row, current_row]
             selection.sort()
-            select_text = get_text_in_rows(doc,selection)
-            select_text = '> ' + select_text
+            select_text = ['']
+            select_text = ['#+BEGIN_QUOTE']
+            select_text += [get_text_in_rows(doc,selection)]
+            select_text += ['#+END_QUOTE']
+            select_text += ['']
             doc.send_to_neovim(select_text, append=False)
             unhighlight_selection([t,b])
             return
@@ -1323,8 +1326,12 @@ def visual_mode(doc,bar):
             note_header = ' Notes on {}, {}'.format(doc.metadata['author'], doc.metadata['title'])
             if doc.citekey:
                 note_header = doc.citekey + note_header
-            select_text = ['## ' + note_header] 
-            select_text +=   ['> ' + get_text_in_rows(doc,selection)]
+            select_text = ['** ' + note_header] 
+            select_text += ['']
+            select_text = ['#+BEGIN_QUOTE']
+            select_text += [get_text_in_rows(doc,selection)]
+            select_text += ['#+END_QUOTE']
+            select_text += ['']
             doc.send_to_neovim(select_text,append=True)
             unhighlight_selection([t,b])
             return
