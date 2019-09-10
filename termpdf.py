@@ -29,7 +29,7 @@ Keys:
     G:              go to end of document
     [count]G:       go to page [count]
     b:		    cycle through open documents
-    v:              visual mode
+    s:              visual mode
     t:              table of contents 
     M:              show metadata
     f:              show links on page
