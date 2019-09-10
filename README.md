@@ -126,12 +126,12 @@ If you want to send a citation to the current page to an attached nvim session
 to end of buffer). If you want to select some text and send that to nvim, you
 need to enter "visual select mode":
     
-    v:              visual select mode
+    s:              visual select mode
     n:              insert note in nvim
     a:              append note in nvim
 
 While in visual select mode, use `j` and `k` (with counts) to move up and
-down. Use `s` to toggle between selecting and not. Use `y` to copy all the
+down. Use `v` to toggle between selecting and not. Use `y` to copy all the
 text within the selection to the clipboard, `n` to insert the text at the cursor point of an attached nvim session  or `a` to append it to the end of an attached nvim session.
 
 If your document has an associated bibtex citekey (see below), yanked text will include a pandoc-style citation:
