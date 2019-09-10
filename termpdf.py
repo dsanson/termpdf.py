@@ -1054,6 +1054,8 @@ def citekey_from_path(path):
 
 def path_from_citekey(citekey):
     bib = bib_from_key([citekey])
+    if bib == None:
+        raise SystemExit('Cannot find file associated with ' + citekey)
     if len(bib.entries) == 1:
         try:
             paths = bib.entries[citekey].fields["File"]
