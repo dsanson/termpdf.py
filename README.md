@@ -132,8 +132,11 @@ need to enter "visual select mode":
     a:              append note in nvim
 
 While in visual select mode, use `j` and `k` (with counts) to move up and
-down. Use `v` to toggle between selecting and not. Use `y` to copy all the
-text within the selection to the clipboard, `n` to insert the text at the cursor point of an attached nvim session  or `a` to append it to the end of an attached nvim session.
+down. Use `v` to toggle between selecting and not. Use 'H' and 'h' to adjust
+the left edge of selection, and 'L' and 'l' to adjust the right edge of
+selection. Use `y` to copy all the text within the selection to the clipboard,
+`n` to insert the text at the cursor point of an attached nvim session or `a`
+to append it to the end of an attached nvim session.
 
 If your document has an associated bibtex citekey (see below), yanked text will include a pandoc-style citation:
 
@@ -355,9 +358,8 @@ in nvim.
 ## Visual Mode 
 
 -   [ ] Keyboard visual mode
-    -   [x] Select by row
+    -   [x] Select by rectangle
     -   [ ] Select by word
-    -   [ ] Select by rectangle
     -   [x] Copy text selection: use the key 'y'
     -   [x] Insert selection in nvim buffer: use the key 'n'
     -   [x] Append selection to nvim_note file: use 'a'

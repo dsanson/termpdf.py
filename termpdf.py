@@ -1224,10 +1224,10 @@ def clean_exit(message=''):
 
     raise SystemExit(message)
 
-def get_text_in_rows(doc, selection):
+def get_text_in_rows(doc,left,right, selection):
     l,t,r,b = doc.page_states[doc.page].place
-    top = (l,t + selection[0] - 1)
-    bottom = (r,t + selection[1])
+    top = (l + left,t + selection[0] - 1)
+    bottom = (l + right,t + selection[1])
     top_pix, bottom_pix = doc.cells_to_pixels(top,bottom)
     rect = fitz.Rect(top_pix, bottom_pix)
     select_text = doc.get_text_in_Rect(rect)
@@ -1242,7 +1242,7 @@ def visual_mode(doc,bar):
     
     width = (r - l) + 1
 
-    def highlight_row(row, fill='▒', color='yellow'):
+    def highlight_row(row,left,right, fill='▒', color='yellow'):
         if color == 'yellow':
             cc = 33
         elif color == 'blue':
@@ -1250,9 +1250,9 @@ def visual_mode(doc,bar):
         elif color == 'none':
             cc = 0
 
-        fill = fill[0] * width
+        fill = fill[0] * (right - left)
 
-        scr.set_cursor(l,row)
+        scr.set_cursor(l + left,row)
         sys.stdout.buffer.write('\033[{}m'.format(cc).encode('ascii'))
         #sys.stdout.buffer.write('\033[{}m'.format(cc + 10).encode('ascii'))
         sys.stdout.write(fill)
@@ -1264,18 +1264,20 @@ def visual_mode(doc,bar):
         # scr.set_cursor(l,row)
         # sys.stdout.write(' ' * width)
         # sys.stdout.flush()
-        highlight_row(row,fill=' ',color='none')
+        highlight_row(row,0,width,fill=' ',color='none')
 
-    def highlight_selection(selection, fill='▒', color='blue'):
+    def highlight_selection(selection,left,right, fill='▒', color='blue'):
         a = min(selection)
         b = max(selection)
         for r in range(a,b+1):
-            highlight_row(r,fill,color)
+            highlight_row(r,left,right,fill,color)
 
     def unhighlight_selection(selection):
-        highlight_selection(selection,fill=' ',color='none')
+        highlight_selection(selection,0,width,fill=' ',color='none')
 
     current_row = t
+    left = 0
+    right = width
     select = False
     selection = [current_row,current_row]
     count_string = '' 
@@ -1286,9 +1288,9 @@ def visual_mode(doc,bar):
         bar.update(doc)
         unhighlight_selection([t,b])
         if select:
-            highlight_selection(selection,color='blue')
+            highlight_selection(selection,left,right,color='blue')
         else:
-            highlight_selection(selection,color='yellow')
+            highlight_selection(selection,left,right,color='yellow')
 
         if count_string == '':
             count = 1
@@ -1333,6 +1335,22 @@ def visual_mode(doc,bar):
             else:
                 selection = [current_row,current_row]
             count_string = ''
+        
+        elif key in keys.NEXT_CHAP:
+            right = min(width,right + count)
+            count_string = ''
+
+        elif key  == ord('L'):
+            right = max(left + 1,right - count)
+            count_string = ''
+
+        elif key in keys.PREV_CHAP:
+            left = max(0,left - count)
+            count_string = ''
+
+        elif key  == ord('H'):
+            left = min(left + count,right - 1)
+            count_string = ''
 
         elif key in keys.GOTO_PAGE:
             current_row = b
@@ -1354,7 +1372,7 @@ def visual_mode(doc,bar):
             if selection == [None,None]:
                 selection = [current_row, current_row]
             selection.sort()
-            select_text = get_text_in_rows(doc,selection)
+            select_text = get_text_in_rows(doc,left,right,selection)
             select_text = '> ' + select_text
             pyperclip.copy(select_text)
             unhighlight_selection([t,b])
@@ -1367,7 +1385,7 @@ def visual_mode(doc,bar):
             selection.sort()
             select_text = ['']
             select_text = ['#+BEGIN_QUOTE']
-            select_text += [get_text_in_rows(doc,selection)]
+            select_text += [get_text_in_rows(doc,left,right,selection)]
             select_text += ['#+END_QUOTE']
             select_text += ['']
             doc.send_to_neovim(select_text, append=False)
@@ -1384,7 +1402,7 @@ def visual_mode(doc,bar):
             select_text = ['** ' + note_header] 
             select_text += ['']
             select_text = ['#+BEGIN_QUOTE']
-            select_text += [get_text_in_rows(doc,selection)]
+            select_text += [get_text_in_rows(doc,left,right,selection)]
             select_text += ['#+END_QUOTE']
             select_text += ['']
             doc.send_to_neovim(select_text,append=True)
