@@ -61,9 +61,11 @@ import shutil
 import select
 import hashlib
 import json
+import roman
 import pyperclip
 from time import sleep, monotonic
 from base64 import standard_b64encode
+from operator import attrgetter
 from collections import namedtuple
 from math import ceil
 from tempfile import NamedTemporaryFile
@@ -267,6 +269,7 @@ class Document(fitz.Document):
         self.prevpage = 0
         self.pages = self.pageCount - 1
         self.first_page_offset = 1
+        self.logical_pages = list(range(0 + self.first_page_offset, self.pages + self.first_page_offset))
         self.chapter = 0
         self.rotation = 0
         self.fontsize = fontsize
@@ -349,16 +352,20 @@ class Document(fitz.Document):
         self.goto_chap(self.chapter - count)
 
     def parse_pagelabels(self):
-        from pdfrw import PdfReader, PdfWriter
-        from pagelabels import PageLabels, PageLabelScheme
-        
-        reader = PdfReader(self.filename)
-        labels = PageLabels.from_pdf(reader)
-        print(labels)
-        raise SystemExit
+        if self.isPDF:
+            from pdfrw import PdfReader, PdfWriter
+            from pagelabels import PageLabels, PageLabelScheme
+            
+            reader = PdfReader(self.filename)
+            labels = PageLabels.from_pdf(reader)
+            labels = sorted(labels, key=attrgetter('startpage'))
+        else:
+            labels = []
+        return labels
 
+    # unused; using pdfrw instead
     def parse_pagelabels_pure(self):
-        cat = self._getPDFroot().get_
+        cat = self._getPDFroot()
 
         cat_str = self._getXrefString(cat)
         lines = cat_str.split('\n')
@@ -370,16 +377,43 @@ class Document(fitz.Document):
         print(labels)
         raise SystemExit
 
-    # TODO add support for logical page spec in PDF catalog
-    def page_to_logical(self, p=None):
-        if p == None:
-            p = self.page
-        return p + self.first_page_offset
+    def pages_to_logical_pages(self):
+        labels = self.parse_pagelabels()
+        self.logical_pages = list(range(0,self.pages + 1))
+        if labels == []:
+            for p in range(0,self.pages + 1):
+                self.logical_pages[p] = p + self.first_page_offset
+        else:
+            for p in range(0,self.pages + 1):
+                for label in labels:
+                    if p >= label.startpage:
+                        lp = (p - label.startpage) + label.firstpagenum
+                        style = label.style
+                        prefix = label.prefix
+                if style == 'roman uppercase':
+                    lp = prefix + roman.toRoman(lp)
+                    lp = lp.upper()
+                elif style == 'roman lowercase':
+                    lp = prefix + roman.toRoman(lp)
+                    lp = lp.lower()
+                else:
+                    lp = prefix + str(lp)
+                self.logical_pages[p] = lp 
 
-    def logical_to_page(self, p=None):
+    def page_to_logical(self, p=None):
         if not p:
             p = self.page
-        return p - self.first_page_offset 
+        return self.logical_pages[p]
+
+    def logical_to_page(self, lp=None):
+        if not lp:
+            lp = self.logicalpage
+        try:
+            p = self.logical_pages.index(lp)
+        except:
+            # no such logical page in document
+            p = 0
+        return p
 
     def make_link(self):
         p = self.page_to_logical(self.page)
@@ -426,6 +460,7 @@ class Document(fitz.Document):
             target = self.find_target(target, target_text)
             self.goto_page(target)
         self.papersize = papersize 
+        self.pages_to_logical_pages()
 
     def mark_all_pages_stale(self):
         self.page_states = [ Page_State(i) for i in range(0,self.pages + 1) ]
@@ -1561,6 +1596,7 @@ def view(doc):
 
         elif key in keys.SET_PAGE:
             doc.first_page_offset = count - doc.page
+            doc.pages_to_logical_pages()
             count_string = ""
             stack = [0]
         
@@ -1628,6 +1664,9 @@ def main(args=sys.argv):
     # load cli settings
     for key in opts:
         setattr(doc, key, opts[key])
+
+    # generate logical pages
+    doc.pages_to_logical_pages()
 
     # normalize page number
     doc.goto_logical_page(doc.logicalpage)

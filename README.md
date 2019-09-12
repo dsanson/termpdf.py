@@ -86,9 +86,10 @@ By default, the first page of a document will be displayed as page 1. But often,
 
 This setting will persist between sessions, and affects your navigation and
 display, as well as the page numbers embedded in automatically generated
-citations. (Note that termpdf.py does not yet have the ability to read or
+citations. (Note that termpdf.py does not yet have the ability to 
 write logical page information from pdfs, so this setting will only work
-within termpdf.py.)
+within termpdf.py. Also note that, if a pdf has embedded logical page number
+information, this setting will not override that.)
 
 You can view the table of contents, metadata, or any links (internal or
 external) on the current page:
@@ -300,7 +301,8 @@ in nvim.
     -   [x] jump to page number
     -   [x] jump to beginning, end of document
 -   [ ] logical page numbers
-    -   [ ] read/write to PDF
+    -   [x] read PDF pagelabels
+    -   [ ] write/edit PDF pagelabels
     -   [x] simple persistent page-offset setting
 -   [x] navigate via table of contents
     -   [ ] outline folding support
