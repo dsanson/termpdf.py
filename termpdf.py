@@ -60,6 +60,7 @@ import zlib
 import shutil
 import select
 import hashlib
+import string
 import json
 import roman
 import pyperclip
@@ -380,6 +381,20 @@ class Document(fitz.Document):
     def pages_to_logical_pages(self):
         labels = self.parse_pagelabels()
         self.logical_pages = list(range(0,self.pages + 1))
+
+        def divmod_alphabetic(n):
+            a, b = divmod(n, 26)
+            if b == 0:
+                return a - 1, b + 26
+            return a, b
+
+        def to_alphabetic(n):
+            chars = []
+            while n > 0:
+                n, d = divmod_alphabetic(n)
+                chars.append(string.ascii_uppercase[d - 1])
+            return ''.join(reversed(chars))
+
         if labels == []:
             for p in range(0,self.pages + 1):
                 self.logical_pages[p] = p + self.first_page_offset
@@ -395,6 +410,11 @@ class Document(fitz.Document):
                     lp = lp.upper()
                 elif style == 'roman lowercase':
                     lp = prefix + roman.toRoman(lp)
+                    lp = lp.lower()
+                elif style == 'alphabetic uppercase':
+                    lp = prefix + to_alphabetic(lp) 
+                elif style == 'alphabetic lowercase':
+                    lp = prefix + to_alphabetic(lp)
                     lp = lp.lower()
                 else:
                     lp = prefix + str(lp)
