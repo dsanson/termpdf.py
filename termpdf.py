@@ -429,7 +429,7 @@ class Document(fitz.Document):
         if not lp:
             lp = self.logicalpage
         try:
-            p = self.logical_pages.index(lp)
+            p = self.logical_pages.index(str(lp))
         except:
             # no such logical page in document
             p = 0
