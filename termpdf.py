@@ -397,7 +397,7 @@ class Document(fitz.Document):
 
         if labels == []:
             for p in range(0,self.pages + 1):
-                self.logical_pages[p] = p + self.first_page_offset
+                self.logical_pages[p] = str(p + self.first_page_offset)
         else:
             for p in range(0,self.pages + 1):
                 for label in labels:
