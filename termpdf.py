@@ -90,6 +90,7 @@ class Config:
             'lynx'
         ]
         self.URL_BROWSER = None
+        self.GUI_VIEWER = 'preview'
         self.NOTE_PATH = os.path.join(os.getenv("HOME"), 'inbox.org')
 
     def browser_detect(self):
@@ -354,7 +355,7 @@ class Document(fitz.Document):
 
     def parse_pagelabels(self):
         if self.isPDF:
-            from pdfrw import PdfReader, PdfWriter
+            from pdfrw import PdfReader
             from pagelabels import PageLabels, PageLabelScheme
             
             reader = PdfReader(self.filename)
@@ -363,6 +364,29 @@ class Document(fitz.Document):
         else:
             labels = []
         return labels
+
+    def set_pagelabel(self,count,style="arabic"):
+        if self.isPDF:
+            from pdfrw import PdfReader, PdfWriter
+            from pagelabels import PageLabels, PageLabelScheme
+            reader = PdfReader(self.filename)
+            labels = PageLabels.from_pdf(reader)
+            newlabels = PageLabels()
+            for label in labels:
+                if label.startpage != self.page:
+                    newlabels.append(label)
+
+            newlabel = PageLabelScheme(startpage=self.page, 
+                                       style=style,
+                                       prefix="",
+                                       firstpagenum=count) 
+            newlabels.append(newlabel) 
+            newlabels.write(reader)
+
+            writer = PdfWriter()
+            writer.trailer = reader
+            print("writing new pagelabels...")
+            writer.write(self.filename)
 
     # unused; using pdfrw instead
     def parse_pagelabels_pure(self):
@@ -601,7 +625,7 @@ class Document(fitz.Document):
         # calculate place in pixels, convert to cells
         pix_x = (dw / 2) - (zw / 2)
         pix_y = (dh / 2) - (zh / 2)
-        l_col = int(pix_x / scr.cell_width)
+        l_col = int(pix_x / scr.cell_width) + 1
         t_row = int(pix_y / scr.cell_height)
         r_col = l_col + int(zw / scr.cell_width)
         b_row = t_row + int(zh / scr.cell_height)
@@ -1020,9 +1044,11 @@ class shortcuts:
         self.TOGGLE_ALPHA     = {ord('A')}
         self.TOGGLE_INVERT    = {ord('i')}
         self.TOGGLE_TINT      = {ord('d')}
-        self.SET_PAGE         = {ord('P')}
+        self.SET_PAGE_LABEL   = {ord('P')}
+        self.SET_PAGE_ALT     = {ord('I')}
         self.INC_FONT         = {ord('=')}
         self.DEC_FONT         = {ord('-')}
+        self.OPEN_GUI         = {ord('X')}
         self.REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
         self.QUIT             = {3, ord('q')}
         self.DEBUG            = {ord('D')}
@@ -1119,10 +1145,17 @@ def path_from_citekey(citekey):
             raise SystemExit('No file for ' + citekey)
         paths = paths.split(';')
         exts = ['.pdf', '.xps', '.cbz', '.fb2' ]
-        extsf = ['.epub', '.oxps' ]
-        paths = [path for path in paths if path[-4:] in exts or path[-5:] in extsf]
-        if len(paths) != 0:
-            return paths[0]
+        extsf = ['.epub', '.oxps']
+        extsl = ['.html']
+        best = [path for path in paths if path[-4:] in exts]
+        okay = [path for path in paths if path[-5:] in extsf]
+        worst = [path for path in paths if path[-5:] in extsl]
+        if len(best) != 0:
+            return best[0]
+        elif len(okay) != 0:
+            return okay[0]
+        elif len(worst) != 0:
+            return worst[0]
     return None
 
 # Command line helper functions
@@ -1190,7 +1223,14 @@ def parse_args(args):
             opts['citekey'] = citekey
             path = path_from_citekey(citekey)
             if path:
-                files += [path]
+                if path[-5:] == '.html':
+                    subprocess.run([config.URL_BROWSER, path], check=True)
+                    print("Opening html file in browser")
+                elif path[-5:] == '.docx':
+                    # TODO: support for docx files
+                    raise SystemExit('Cannot open ' + path)
+                else:
+                    files += [path]
             else:
                 raise SystemExit('No file for ' + citekey) 
             skip = True
@@ -1204,6 +1244,9 @@ def parse_args(args):
             raise SystemExit('Unknown option: ' + arg)
         else:
             raise SystemExit('Can\'t open file: ' + arg)
+
+    if len(files) == 0:
+        raise SystemExit('No file to open')
 
     return files, opts
 
@@ -1632,11 +1675,22 @@ def view(doc):
             count_string = ""
             stack = [0]
 
-        elif key in keys.SET_PAGE:
-            doc.first_page_offset = count - doc.page
+        elif key in keys.SET_PAGE_LABEL:
+            if doc.isPDF:
+                doc.set_pagelabel(count,'arabic')
+            else:
+                doc.first_page_offset = count - doc.page
             doc.pages_to_logical_pages()
             count_string = ""
             stack = [0]
+ 
+        elif key in keys.SET_PAGE_ALT:
+            if doc.isPDF:
+                doc.set_pagelabel(count,'roman lowercase')
+            else:
+                doc.first_page_offset = count - doc.page
+            doc.pages_to_logical_pages()
+            count_string = ""
         
         elif key == ord('/'):
             scr.place_string(1,scr.rows,"/")
@@ -1646,6 +1700,9 @@ def view(doc):
             search_text = s.decode('utf-8')
             curses.noecho()
             bar.message = doc.search_text(search_text)
+
+        elif key in keys.OPEN_GUI:
+            subprocess.run([config.GUI_VIEWER, doc.filename], check=True)
 
         elif key in keys.DEBUG:
             pass
