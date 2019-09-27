@@ -1,5 +1,8 @@
 PyMuPDF
+pdfrw
 pyperclip
 pybtex
 pynvim
+roman
+pagelabels
 
