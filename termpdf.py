@@ -357,10 +357,12 @@ class Document(fitz.Document):
         if self.isPDF:
             from pdfrw import PdfReader
             from pagelabels import PageLabels, PageLabelScheme
-            
-            reader = PdfReader(self.filename)
-            labels = PageLabels.from_pdf(reader)
-            labels = sorted(labels, key=attrgetter('startpage'))
+            try: 
+                reader = PdfReader(self.filename)
+                labels = PageLabels.from_pdf(reader)
+                labels = sorted(labels, key=attrgetter('startpage'))
+            except:
+                labels = []
         else:
             labels = []
         return labels
@@ -385,7 +387,7 @@ class Document(fitz.Document):
 
             writer = PdfWriter()
             writer.trailer = reader
-            print("writing new pagelabels...")
+            #print("writing new pagelabels...")
             writer.write(self.filename)
 
     # unused; using pdfrw instead
@@ -576,7 +578,7 @@ class Document(fitz.Document):
         return "no matches"
 
     def auto_crop(self,page):
-        blocks = page.getTextBlocks(images=True)
+        blocks = page.getTextBlocks()
 
         if len(blocks) > 0:
             crop = fitz.Rect(blocks[0][:4])
