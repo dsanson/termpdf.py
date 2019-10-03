@@ -1385,7 +1385,7 @@ def visual_mode(doc,bar):
             right = min(width,right + count)
             count_string = ''
 
-        elif key  == ord('L'):
+        elif key in { ord('L'), curses.KEY_SRIGHT }:
             right = max(left + 1,right - count)
             count_string = ''
 
@@ -1393,7 +1393,7 @@ def visual_mode(doc,bar):
             left = max(0,left - count)
             count_string = ''
 
-        elif key  == ord('H'):
+        elif key  in { ord('H'), curses.KEY_SLEFT }:
             left = min(left + count,right - 1)
             count_string = ''
 
