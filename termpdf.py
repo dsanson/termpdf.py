@@ -1493,8 +1493,21 @@ def view(doc):
             scr.clear()
             scr.get_size()
             scr.init_curses()
-            doc.set_layout(doc.papersize)
-            doc.mark_all_pages_stale()
+            current_doc = bufs.docs[bufs.current]
+            current_doc.write_state()
+            doc = Document(current_doc.filename)
+            cachefile = get_cachefile(doc.filename)
+            if os.path.exists(cachefile):
+                with open(cachefile, 'r') as f:
+                    state = json.load(f)
+                for key in state:
+                    setattr(doc, key, state[key])
+            bufs.docs[bufs.current] = doc
+            if not doc.citekey:
+                doc.citekey = citekey_from_path(doc.filename)
+            doc.pages_to_logical_pages()
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
 
         elif key == 27:
             # quash stray escape codes
