@@ -654,7 +654,8 @@ class Document(fitz.Document):
                 red = int(tint[0] * 256)
                 blue = int(tint[1] * 256)
                 green = int(tint[2] * 256)
-                pix.tintWith(red,blue,green)
+                # pix.tintWith(red, blue, green)
+                bar.message = 'tinting disabled due to unresolved bug'
             
             # build cmd to send to kitty
             cmd = {'i': p + 1, 't': 'd', 's': pix.width, 'v': pix.height}
