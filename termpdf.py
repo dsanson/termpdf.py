@@ -1749,6 +1749,9 @@ def main(args=sys.argv):
             'Terminal does not support reporting screen sizes via the TIOCGWINSZ ioctl'
         )
 
+    if scr.width == 65535:
+        raise SystemExit('Screen size is not being reported properly.\nThis problem might be caused by the fish shell.')
+
     paths, opts = parse_args(args)
 
     for path in paths:
