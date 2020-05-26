@@ -1253,8 +1253,9 @@ def parse_args(args):
 
     return files, opts
 
-
 def clean_exit(message=''):
+    
+    scr.create_text_win(1, ' ')
 
     for doc in bufs.docs:
         # save current state
