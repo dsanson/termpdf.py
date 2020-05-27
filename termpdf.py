@@ -278,6 +278,8 @@ class Document(fitz.Document):
         self.width = width
         self.height = height
         self.autocrop = False
+        self.manualcrop = False
+        self.manualcroprect = [None,None]
         self.alpha = False
         self.invert = False
         self.tint = False
@@ -296,6 +298,8 @@ class Document(fitz.Document):
                  'chapter': self.chapter,
                  'rotation': self.rotation,
                  'autocrop': self.autocrop,
+                 'manualcrop': self.manualcrop,
+                 'manualcroprect': self.manualcroprect,
                  'alpha': self.alpha,
                  'invert': self.invert,
                  'tint': self.tint}
@@ -596,7 +600,10 @@ class Document(fitz.Document):
         page = self.loadPage(p)
         page_state = self.page_states[p]
         
-        if self.autocrop and self.isPDF:
+        if self.manualcrop and self.manualcroprect != [None,None] and self.isPDF:
+            page.setCropBox(fitz.Rect(self.manualcroprect[0],self.manualcroprect[1]))
+
+        elif self.autocrop and self.isPDF:
             page.setCropBox(page.MediaBox)
             crop = self.auto_crop(page)
             page.setCropBox(crop)
@@ -1282,6 +1289,14 @@ def get_text_in_rows(doc,left,right, selection):
     select_text = select_text + [link]
     return (' '.join(select_text))
 
+def crop_to_selection(doc,left,right,selection):
+    l,t,r,b = doc.page_states[doc.page].place
+    top = (l + left,t + selection[0] - 1)
+    bottom = (l + right,t + selection[1])
+    top_pix, bottom_pix = doc.cells_to_pixels(top,bottom)
+    doc.manualcrop = True
+    doc.manualcroprect = [top_pix, bottom_pix]
+
 # Viewer functions
 
 def visual_mode(doc,bar):
@@ -1455,6 +1470,12 @@ def visual_mode(doc,bar):
             doc.send_to_neovim(select_text,append=True)
             unhighlight_selection([t,b])
             return
+        
+        elif key in keys.TOGGLE_AUTOCROP and selection != [None,None]:
+            crop_to_selection(doc,left,right,selection)
+            unhighlight_selection([t,b])
+            doc.mark_all_pages_stale()
+            return
 
 def view(doc):
 
@@ -1623,7 +1644,19 @@ def view(doc):
             stack = [0]
 
         elif key in keys.TOGGLE_AUTOCROP:
-            doc.autocrop = not doc.autocrop
+            # cycle through no crop, autocrop, and manualcrop
+            if doc.manualcroprect != [None,None]:
+                if doc.autocrop:
+                    doc.autocrop = False
+                    doc.manualcrop = True
+                elif doc.manualcrop:
+                    doc.autocrop = False
+                    doc.manualcrop = False
+                else:
+                    doc.autocrop = True
+            # just toggle autocrop
+            else:
+                doc.autocrop = not doc.autocrop
             doc.mark_all_pages_stale()
             count_string = ""
             stack = [0]
