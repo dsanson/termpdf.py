@@ -1487,9 +1487,13 @@ def view(doc):
         else:
             count = int(count_string)
         
-        # refresh if file mtime has changed
+        key = scr.stdscr.getch()
         ntimestamp = os.path.getmtime(doc.filename)
-        if ntimestamp != timestamp:
+
+        if key == -1:
+            pass
+
+        elif key in keys.REFRESH or ntimestamp != timestamp:
             scr.clear()
             scr.get_size()
             scr.init_curses()
@@ -1510,248 +1514,221 @@ def view(doc):
             doc.set_layout(doc.papersize,adjustpage=False)
             timestamp = ntimestamp
 
-        else:
+        elif key == 27:
+            # quash stray escape codes
+            scr.swallow_keys()
+            count_string = ""
+            stack = [0]
 
-            key = scr.stdscr.getch()
+        elif stack[0] in keys.BUFFER_CYCLE and key in range(48,58):
+            bufs.goto_buffer(int(chr(key)) - 1)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
 
-            if key == -1:
-                pass
+        elif stack[0] in keys.BUFFER_CYCLE and key == ord('d'):
+            bufs.close_buffer(bufs.current)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.REFRESH:
-                scr.clear()
-                scr.get_size()
-                scr.init_curses()
-                current_doc = bufs.docs[bufs.current]
-                current_doc.write_state()
-                doc = Document(current_doc.filename)
-                cachefile = get_cachefile(doc.filename)
-                if os.path.exists(cachefile):
-                    with open(cachefile, 'r') as f:
-                        state = json.load(f)
-                    for key in state:
-                        setattr(doc, key, state[key])
-                bufs.docs[bufs.current] = doc
-                if not doc.citekey:
-                    doc.citekey = citekey_from_path(doc.filename)
-                doc.pages_to_logical_pages()
-                doc.goto_logical_page(doc.logicalpage)
-                doc.set_layout(doc.papersize,adjustpage=False)
+        elif stack[0] in keys.BUFFER_CYCLE and key in keys.BUFFER_CYCLE:
+            bufs.cycle(count)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
 
-            elif key == 27:
-                # quash stray escape codes
-                scr.swallow_keys()
-                count_string = ""
-                stack = [0]
+        elif key in keys.BUFFER_CYCLE_REV:
+            bufs.cycle(-count)
+            doc = bufs.docs[bufs.current]
+            doc.goto_logical_page(doc.logicalpage)
+            doc.set_layout(doc.papersize,adjustpage=False)
+            doc.mark_all_pages_stale()
+            if doc.citekey:
+                bar.message = doc.citekey
+            count_string = ""
+            stack = [0]
 
-            elif stack[0] in keys.BUFFER_CYCLE and key in range(48,58):
-                bufs.goto_buffer(int(chr(key)) - 1)
-                doc = bufs.docs[bufs.current]
-                doc.goto_logical_page(doc.logicalpage)
-                doc.set_layout(doc.papersize,adjustpage=False)
-                doc.mark_all_pages_stale()
-                if doc.citekey:
-                    bar.message = doc.citekey
-                count_string = ""
-                stack = [0]
+        elif key in range(48,58): #numerals
+            stack = [key] + stack
+            count_string = count_string + chr(key)
 
-            elif stack[0] in keys.BUFFER_CYCLE and key == ord('d'):
-                bufs.close_buffer(bufs.current)
-                doc = bufs.docs[bufs.current]
-                doc.goto_logical_page(doc.logicalpage)
-                doc.set_layout(doc.papersize,adjustpage=False)
-                doc.mark_all_pages_stale()
-                if doc.citekey:
-                    bar.message = doc.citekey
-                count_string = ""
-                stack = [0]
+        elif key in keys.QUIT:
+            clean_exit()
 
-            elif stack[0] in keys.BUFFER_CYCLE and key in keys.BUFFER_CYCLE:
-                bufs.cycle(count)
-                doc = bufs.docs[bufs.current]
-                doc.goto_logical_page(doc.logicalpage)
-                doc.set_layout(doc.papersize,adjustpage=False)
-                doc.mark_all_pages_stale()
-                if doc.citekey:
-                    bar.message = doc.citekey
-                count_string = ""
-                stack = [0]
+        elif key in keys.GOTO_PAGE:
+            if count_string == "":
+                p = doc.page_to_logical(doc.pages)
+            else:
+                p = count
+            doc.goto_logical_page(p)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.BUFFER_CYCLE_REV:
-                bufs.cycle(-count)
-                doc = bufs.docs[bufs.current]
-                doc.goto_logical_page(doc.logicalpage)
-                doc.set_layout(doc.papersize,adjustpage=False)
-                doc.mark_all_pages_stale()
-                if doc.citekey:
-                    bar.message = doc.citekey
-                count_string = ""
-                stack = [0]
+        elif key in keys.NEXT_PAGE:
+            doc.next_page(count)
+            count_string = ""
+            stack = [0]
 
-            elif key in range(48,58): #numerals
-                stack = [key] + stack
-                count_string = count_string + chr(key)
+        elif key in keys.PREV_PAGE:
+            doc.prev_page(count)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.QUIT:
-                clean_exit()
+        elif key in keys.GO_BACK:
+            doc.goto_page(doc.prevpage)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.GOTO_PAGE:
-                if count_string == "":
-                    p = doc.page_to_logical(doc.pages)
-                else:
-                    p = count
-                doc.goto_logical_page(p)
-                count_string = ""
-                stack = [0]
+        elif key in keys.NEXT_CHAP:
+            doc.next_chap(count)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.NEXT_PAGE:
-                doc.next_page(count)
-                count_string = ""
-                stack = [0]
+        elif key in keys.PREV_CHAP:
+            doc.prev_chap(count)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.PREV_PAGE:
-                doc.prev_page(count)
-                count_string = ""
-                stack = [0]
+        elif stack[0] in keys.GOTO and key in keys.GOTO:
+            doc.goto_page(0)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.GO_BACK:
-                doc.goto_page(doc.prevpage)
-                count_string = ""
-                stack = [0]
+        elif key in keys.ROTATE_CW:
+            doc.rotation = (doc.rotation + 90 * count) % 360
+            doc.mark_all_pages_stale()
+            count_string = ''
+            stack = [0]
 
-            elif key in keys.NEXT_CHAP:
-                doc.next_chap(count)
-                count_string = ""
-                stack = [0]
+        elif key in keys.ROTATE_CCW:
+            doc.rotation = (doc.rotation - 90 * count) % 360
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.PREV_CHAP:
-                doc.prev_chap(count)
-                count_string = ""
-                stack = [0]
+        elif key in keys.TOGGLE_AUTOCROP:
+            doc.autocrop = not doc.autocrop
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
 
-            elif stack[0] in keys.GOTO and key in keys.GOTO:
-                doc.goto_page(0)
-                count_string = ""
-                stack = [0]
+        elif key in keys.TOGGLE_ALPHA:
+            doc.alpha = not doc.alpha
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.ROTATE_CW:
-                doc.rotation = (doc.rotation + 90 * count) % 360
-                doc.mark_all_pages_stale()
-                count_string = ''
-                stack = [0]
+        elif key in keys.TOGGLE_INVERT:
+            doc.invert = not doc.invert
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
+        
+        elif key in keys.TOGGLE_TINT:
+            doc.tint = not doc.tint
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.ROTATE_CCW:
-                doc.rotation = (doc.rotation - 90 * count) % 360
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
+        elif key in keys.SHOW_TOC:
+            doc.show_toc(bar)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.TOGGLE_AUTOCROP:
-                doc.autocrop = not doc.autocrop
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
+        elif key in keys.SHOW_META:
+            doc.show_meta(bar)
+            count_string = ""
+            stack = [0]
+        
+        elif key in keys.SHOW_LINKS:
+            doc.show_links(bar)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.TOGGLE_ALPHA:
-                doc.alpha = not doc.alpha
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
+        elif key in keys.TOGGLE_TEXT_MODE:
+            doc.view_text()
+            count_string = ""
+            stack = [0]
+       
+        elif key in keys.INC_FONT:
+            doc.set_layout(doc.papersize - count)
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
+        
+        elif key in keys.DEC_FONT:
+            doc.set_layout(doc.papersize + count)
+            doc.mark_all_pages_stale()
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.TOGGLE_INVERT:
-                doc.invert = not doc.invert
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
-            
-            elif key in keys.TOGGLE_TINT:
-                doc.tint = not doc.tint
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
+        elif key in keys.VISUAL_MODE:
+            visual_mode(doc,bar)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.SHOW_TOC:
-                doc.show_toc(bar)
-                count_string = ""
-                stack = [0]
+        elif key in keys.INSERT_NOTE:
+            text = doc.make_link()
+            doc.send_to_neovim(text,append=False)
+            count_string = ""
+            stack = [0]
+        
+        elif key in keys.APPEND_NOTE:
+            text = doc.make_link()
+            doc.send_to_neovim(text,append=True)
+            count_string = ""
+            stack = [0]
 
-            elif key in keys.SHOW_META:
-                doc.show_meta(bar)
-                count_string = ""
-                stack = [0]
-            
-            elif key in keys.SHOW_LINKS:
-                doc.show_links(bar)
-                count_string = ""
-                stack = [0]
+        elif key in keys.SET_PAGE_LABEL:
+            if doc.isPDF:
+                doc.set_pagelabel(count,'arabic')
+            else:
+                doc.first_page_offset = count - doc.page
+            doc.pages_to_logical_pages()
+            count_string = ""
+            stack = [0]
+ 
+        elif key in keys.SET_PAGE_ALT:
+            if doc.isPDF:
+                doc.set_pagelabel(count,'roman lowercase')
+            else:
+                doc.first_page_offset = count - doc.page
+            doc.pages_to_logical_pages()
+            count_string = ""
+        
+        elif key == ord('/'):
+            scr.place_string(1,scr.rows,"/")
+            curses.echo()
+            scr.set_cursor(2,scr.rows)
+            s = scr.stdscr.getstr()
+            search_text = s.decode('utf-8')
+            curses.noecho()
+            bar.message = doc.search_text(search_text)
 
-            elif key in keys.TOGGLE_TEXT_MODE:
-                doc.view_text()
-                count_string = ""
-                stack = [0]
-           
-            elif key in keys.INC_FONT:
-                doc.set_layout(doc.papersize - count)
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
-            
-            elif key in keys.DEC_FONT:
-                doc.set_layout(doc.papersize + count)
-                doc.mark_all_pages_stale()
-                count_string = ""
-                stack = [0]
+        elif key in keys.OPEN_GUI:
+            subprocess.run([config.GUI_VIEWER, doc.filename], check=True)
 
-            elif key in keys.VISUAL_MODE:
-                visual_mode(doc,bar)
-                count_string = ""
-                stack = [0]
+        elif key in keys.DEBUG:
+            pass
 
-            elif key in keys.INSERT_NOTE:
-                text = doc.make_link()
-                doc.send_to_neovim(text,append=False)
-                count_string = ""
-                stack = [0]
-            
-            elif key in keys.APPEND_NOTE:
-                text = doc.make_link()
-                doc.send_to_neovim(text,append=True)
-                count_string = ""
-                stack = [0]
-
-            elif key in keys.SET_PAGE_LABEL:
-                if doc.isPDF:
-                    doc.set_pagelabel(count,'arabic')
-                else:
-                    doc.first_page_offset = count - doc.page
-                doc.pages_to_logical_pages()
-                count_string = ""
-                stack = [0]
-     
-            elif key in keys.SET_PAGE_ALT:
-                if doc.isPDF:
-                    doc.set_pagelabel(count,'roman lowercase')
-                else:
-                    doc.first_page_offset = count - doc.page
-                doc.pages_to_logical_pages()
-                count_string = ""
-            
-            elif key == ord('/'):
-                scr.place_string(1,scr.rows,"/")
-                curses.echo()
-                scr.set_cursor(2,scr.rows)
-                s = scr.stdscr.getstr()
-                search_text = s.decode('utf-8')
-                curses.noecho()
-                bar.message = doc.search_text(search_text)
-
-            elif key in keys.OPEN_GUI:
-                subprocess.run([config.GUI_VIEWER, doc.filename], check=True)
-
-            elif key in keys.DEBUG:
-                pass
-
-            elif key in range(48,257): #printable characters
-                stack = [key] + stack
+        elif key in range(48,257): #printable characters
+            stack = [key] + stack
 
 
 # config is global
