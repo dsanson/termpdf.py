@@ -57,9 +57,14 @@ If you want to specify the "logical page number" of the first page,
 
 	termpdf.py -f 132 example.pdf
 
+(This is handy if you want to launch `termpdf.py` from a script, and your
+script knows that the PDF is a journal article that begins on page 236.)
+
 You can open several files at once:
 
 	termpdf.py example.pdf example2.pdf example3.pdf
+
+To cycle through several open files, press the key `b` (for "buffer").
 
 # Keyboard Shortcuts
 
@@ -73,23 +78,49 @@ navigation:
     gg:             go to beginning of document
     G:              go to end of document
     [count]G:       go to page [count]
+    q:              quit
 
 Note that these take counts, so `10j` moves forward 10 pages. 
 
-If you opened several documents at once, you can cycle through these documents by pressing `b`:
+As mentioned above, if you opened several documents at once, you can cycle through these documents by pressing `b`:
 
 	b				cycle through documents in buffer
 
-By default, the first page of a document will be displayed as page 1. But often, the "real" page number is something else. From any page, type in its "real" page number and hit `P`:
+## Page Numbers and Page Labels
 
-    [count]P:       Set logical page number of current page to count
+The first page of a PDF is not always page 1. termpdf.py supports PDF "Page
+Labels" for managing this. If your document already has page labels,
+termpdf.py will use those labels to number pages. Note that this can cause
+trouble when using a command like `10G` to go to page 10, as it is quite
+possible to have two pages in a single document, both labeled "10".
 
-This setting will persist between sessions, and affects your navigation and
-display, as well as the page numbers embedded in automatically generated
-citations. (Note that termpdf.py does not yet have the ability to 
-write logical page information from pdfs, so this setting will only work
-within termpdf.py. Also note that, if a pdf has embedded logical page number
-information, this setting will not override that.)
+You can also add Page Labels from within termpdf.py. 
+
+    [count]P:       Set page label of current page to count (as an arabic
+                    numeral)
+    [count]I:       Set page label of current page to count (as a lowercase
+                    roman numeral)
+
+For example, if your PDF is a journal article, and the first page should be
+page 283, navigate to the first page, and type `283P`. Or, if your PDF is a
+book, you might navigate to the first page, and type `1I`, to start numbering
+the preface material in lowercase roman numerals, and then navigate to the
+proper page 1, and type `1P`, to continue numbering the rest of the PDF in
+arabic numerals.
+
+Some caveats:
+
+-   A Page Label affects page numbering for all *subsequent unlabeled pages*.
+    It does not affect the page numbering of pages before it.
+-   Nothing will stop you from labelling the first page of your PDF "10", the
+    second page of your PDF "10", the third page of your PDF "10", and so on.
+    The result will be nonsense, and will break your ability to navigate to
+    pages by page number.
+-   Currently, termpdf.py offers no methods for *deleting* page labels, so if
+    you make a mess, you will have to fix it with some other piece of
+    software. I'm not sure what the best software is for this purpose.
+
+## Table of Contents, Links, and Metadata
 
 You can view the table of contents, metadata, or any links (internal or
 external) on the current page:
@@ -100,10 +131,13 @@ external) on the current page:
 
 While viewing the table of contents, use `j` and `k` to navigate, and <enter> to jump to a new section.
 
-While viewing links, use `j` and `k` to navigate, and <enter> to open the link. For internal links, this will jump to the appropriate page. External links will be opened in your browser (see URL_BROWSER for more info). External links to PDFs will be opened in termpdf.py (not yet implemented).
+While viewing links, use `j` and `k` to navigate, and <enter> to open the link. For internal links, this will jump to the appropriate page. External links will be opened in your browser (see URL_BROWSER for more info).
 
 While viewing metadata, press `b` to update the metadata from an associated
-bibtex file (see below for how to set this up).
+bibtex file (see below for how to set this up). There is currently no support
+for manually editing the metadata within termpdf.py.
+
+## Rotation, Cropping, Inverting
 
 You can also adjust the display of the document in a variety of ways:
 
@@ -117,19 +151,23 @@ You can also adjust the display of the document in a variety of ways:
     +:              zoom in (reflowable only)
     ctrl-r:         refresh
 
-(Zooming is currently only implemented for reflowable formats, like `epub`.)
+Zooming is currently only implemented for reflowable formats, like `epub`.
+
+Alpha transparency and autocropping will only work on some PDFs. For manual
+cropping, see the section below, on the visual select mode.
 
 The refresh command is helpful if the page fails to display, or displays
 funny: try hitting `ctrl-r` to see if that fixes the problem.
 
-If you want to send a citation to the current page to an attached nvim session
-(more below), use `n` (to insert at current cursor location) or `a` (to append
-to end of buffer). If you want to select some text and send that to nvim, you
+## Visual Select Mode
+
+If you want to select some text and send that to nvim, you
 need to enter "visual select mode":
     
     s:              visual select mode
-    n:              insert note in nvim
-    a:              append note in nvim
+    v:              toggle between selecting and not.
+    n:              insert selected text in nvim at current cursor location
+    a:              append selected text in nvim at end of buffer
 
 While in visual select mode, use `j` and `k` (with counts) to move up and
 down. Use `v` to toggle between selecting and not. Use 'H' and 'h' to adjust
@@ -138,19 +176,39 @@ selection. Use `y` to copy all the text within the selection to the clipboard,
 `n` to insert the text at the cursor point of an attached nvim session or `a`
 to append it to the end of an attached nvim session.
 
+Note that selection of text will only work on PDFs that have embedded textual
+information, and may be unreliable with OCRed text, or weirdly constructed
+PDFs.
+
+You can also use visual select mode to manually crop a document (the manual
+crop is not written to the file---it just affects how the document is
+displayed). Use `s` to enter visual select mode, `v` to begin a selection, and
+the motion keys to select the rectangle you wish to crop to. Then press `c`.
+The crop will affect all pages of the document. If you have defined a manual
+crop, you can use `c` to rotate through no cropping, autocropping, and manual
+cropping.
+
+Note that visual select mode is implemented using curses, and the smallest block you can select is a terminal cell. If you want higher 'resolution', adjust kitty's font size in the window.
+
+## Bibtex Integration
+
 If your document has an associated bibtex citekey (see below), yanked text will include a pandoc-style citation:
 
 	[@author2015, p. 205]
 
-(Other citation formats are not yet implemented.) Otherwise, it will construct a citation from the metadata:
+(Other citation formats are not yet implemented.) Otherwise, it will construct
+a citation from the PDF metadata:
 
 	(Author, Title, p. 205)
 
-Note that visual select mode is implemented using curses, and the smallest block you can select is a terminal cell. If you want higher 'resolution', adjust kitty's font size in the window.
+If you just want to send a citation to nvim, without selecting any text, you
+can use `n` or `a` in normal mode, too.
 
-Finally, to quit, just press `q`:
+## Autorefreshing Edited Files
 
-    q:              quit
+termpdf.py spends most of its time waiting for your keypress. After it receives
+a keypress, it quickly checks to see if the PDF file has been modified, and,
+if it has, it reloads the document.
 
 # Config file
 
@@ -197,7 +255,8 @@ This works for several documents as well:
 
 	termpdf.py --open author2015 --open author2016
 
-Both of these features rely on pybtex, but it take awhile for pybtex to parse a large bibtex database. So, if `bibtool` is available, termpdf.py will use it to speed things up.
+Both of these features rely on pybtex, but it takes awhile for pybtex to parse
+a large bibtex database. So, if `bibtool` is installed, termpdf.py will use it to speed things up.
 
 # nvim interaction
 
@@ -305,8 +364,7 @@ in nvim.
     -   [x] jump to beginning, end of document
 -   [ ] logical page numbers
     -   [x] read PDF pagelabels
-    -   [ ] write/edit PDF pagelabels
-    -   [x] simple persistent page-offset setting
+    -   [x] write PDF pagelabels
 -   [x] navigate via table of contents
     -   [ ] outline folding support
 -   [ ] Thumbnail mode
@@ -331,6 +389,7 @@ in nvim.
 -   [x] toggle tinted background
 -   [ ] Cropping and zooming
     -   [x] autocrop margins
+    -   [x] manual cropping using visual select mode
     -   [ ] fit to width
     -   [ ] fit to height
     -   [ ] arbitrary zooming 
@@ -364,7 +423,7 @@ in nvim.
     -   [x] Insert selection in nvim buffer: use the key 'n'
     -   [x] Append selection to nvim_note file: use 'a'
     -   [ ] Copy selected image
-    -   [ ] Crop to selection
+    -   [x] Crop to selection
     -   [ ] Insert annotation
 -   [ ] Mouse mode
     -   [ ] Select by word
