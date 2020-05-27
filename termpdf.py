@@ -7,7 +7,8 @@ Usage:
 Options:
     -p n, --page-number n : open to page n
     -f n, --first-page n : set logical page number for page 1 to n
-    --citekey key : bibtex citekey
+    --citekey key : associate file with bibtex citekey
+    -o, --open citekey : open file associated with bibtex entry with citekey
     --nvim-listen-address path : path to nvim msgpack server
     -v, --version
     -h, --help
