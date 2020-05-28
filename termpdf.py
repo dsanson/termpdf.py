@@ -10,6 +10,7 @@ Options:
     --citekey key : associate file with bibtex citekey
     -o, --open citekey : open file associated with bibtex entry with citekey
     --nvim-listen-address path : path to nvim msgpack server
+    --ignore-cache : ignore saved settings for files
     -v, --version
     -h, --help
 """
@@ -55,6 +56,7 @@ import fcntl
 import fitz
 import os
 import sys
+import logging
 import termios
 import subprocess
 import zlib
@@ -71,6 +73,10 @@ from operator import attrgetter
 from collections import namedtuple
 from math import ceil
 from tempfile import NamedTemporaryFile
+
+# DEBUG logging
+#logging.basicConfig(filename='termpdf.log',level=logging.DEBUG)
+logging.basicConfig(filename='termpdf.log',level=logging.WARNING)
 
 # Class Definitions
 
@@ -252,7 +258,7 @@ def get_filehash(path):
 
 def get_cachefile(path):
     filehash = get_filehash(path)
-    cachedir = os.path.join(os.getenv("HOME"), '.config', 'termpdf.py', 'cache')
+    cachedir = os.path.join(os.getenv("HOME"), '.cache', 'termpdf.py')
     os.makedirs(cachedir, exist_ok=True)
     cachefile = os.path.join(cachedir, filehash)
     return cachefile
@@ -392,7 +398,7 @@ class Document(fitz.Document):
 
             writer = PdfWriter()
             writer.trailer = reader
-            #print("writing new pagelabels...")
+            logging.debug("writing new pagelabels...")
             writer.write(self.filename)
 
     # unused; using pdfrw instead
@@ -406,7 +412,7 @@ class Document(fitz.Document):
             match = re.search('/PageLabels',line)
             if re.match(r'.*/PageLabels.*', line):
                 labels += [line]
-        print(labels)
+        logging.debug(labels)
         raise SystemExit
 
     def pages_to_logical_pages(self):
@@ -1187,7 +1193,7 @@ def print_help():
 
 def parse_args(args):
     files = []
-    opts = {} 
+    opts = {'ignore_cache': False} 
     if len(args) == 1:
         args = args + ['-h']
 
@@ -1245,6 +1251,8 @@ def parse_args(args):
             else:
                 raise SystemExit('No file for ' + citekey) 
             skip = True
+        elif arg in {'--ignore-cache'}:
+            opts['ignore_cache'] = True
         elif os.path.isfile(arg):
             files = files + [arg]
         elif os.path.isfile(arg.strip('\"')):
@@ -1800,7 +1808,7 @@ def main(args=sys.argv):
 
         # load saved file state
         cachefile = get_cachefile(doc.filename)
-        if os.path.exists(cachefile):
+        if os.path.exists(cachefile) and not opts['ignore_cache']:
             with open(cachefile, 'r') as f:
                 state = json.load(f)
             for key in state:

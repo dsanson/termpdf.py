@@ -64,7 +64,7 @@ You can open several files at once:
 
 	termpdf.py example.pdf example2.pdf example3.pdf
 
-To cycle through several open files, press the key `b` (for "buffer").
+To cycle through several open files, press `b` (for "buffer").
 
 # Keyboard Shortcuts
 
@@ -308,6 +308,19 @@ When called, this function treats the current word as a citekey, and attempts
 to open the document associated with that citekey in termpdf.py, jumping to
 the cited page if there is one. Notes will now be sent back to this document
 in nvim.
+
+# Cached document settings
+
+termpdf.py creates a cache directory in `$HOME/.cache/termpdf.py`, and uses
+the cache to save settings for each document you open. Documents will
+automatically open to the last viewed page, with the same cropping and
+rotation, etc.
+
+Sometimes, that's not what you want. 
+
+    termpdf.py --ignore-cache example.pdf
+
+will open the document up "fresh", ignoring any saved settings.
 
 # Features
 
