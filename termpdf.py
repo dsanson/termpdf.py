@@ -75,8 +75,8 @@ from math import ceil
 from tempfile import NamedTemporaryFile
 
 # DEBUG logging
-#logging.basicConfig(filename='termpdf.log',level=logging.DEBUG)
-logging.basicConfig(filename='termpdf.log',level=logging.WARNING)
+logging.basicConfig(filename='termpdf.log',level=logging.DEBUG)
+#logging.basicConfig(filename='termpdf.log',level=logging.WARNING)
 
 # Class Definitions
 
@@ -1034,41 +1034,41 @@ class status_bar:
 class shortcuts:
 
     def __init__(self):
-        self.GOTO_PAGE        = {ord('G')}
-        self.GOTO             = {ord('g')}
-        self.NEXT_PAGE        = {ord('j'), curses.KEY_DOWN, ord(' ')}
-        self.PREV_PAGE        = {ord('k'), curses.KEY_UP}
-        self.GO_BACK          = {ord('p')}
-        self.NEXT_CHAP        = {ord('l'), curses.KEY_RIGHT}
-        self.PREV_CHAP        = {ord('h'), curses.KEY_LEFT}
-        self.BUFFER_CYCLE     = {ord('b')}
-        self.BUFFER_CYCLE_REV = {ord('B')}
-        self.HINTS            = {ord('f')}
-        self.OPEN             = {curses.KEY_ENTER, curses.KEY_RIGHT, 10}
-        self.SHOW_TOC         = {ord('t')}
-        self.SHOW_META        = {ord('M')}
-        self.UPDATE_FROM_BIB  = {ord('b')}
-        self.SHOW_LINKS       = {ord('f')}
-        self.TOGGLE_TEXT_MODE = {ord('T')}
-        self.ROTATE_CW        = {ord('r')}
-        self.ROTATE_CCW       = {ord('R')}
-        self.VISUAL_MODE      = {ord('s')}
-        self.SELECT           = {ord('v')}
-        self.YANK             = {ord('y')}
-        self.INSERT_NOTE      = {ord('n')}
-        self.APPEND_NOTE      = {ord('a')}
-        self.TOGGLE_AUTOCROP  = {ord('c')}
-        self.TOGGLE_ALPHA     = {ord('A')}
-        self.TOGGLE_INVERT    = {ord('i')}
-        self.TOGGLE_TINT      = {ord('d')}
-        self.SET_PAGE_LABEL   = {ord('P')}
-        self.SET_PAGE_ALT     = {ord('I')}
-        self.INC_FONT         = {ord('=')}
-        self.DEC_FONT         = {ord('-')}
-        self.OPEN_GUI         = {ord('X')}
-        self.REFRESH          = {18, curses.KEY_RESIZE}            # CTRL-R
-        self.QUIT             = {3, ord('q')}
-        self.DEBUG            = {ord('D')}
+        self.GOTO_PAGE        = [ord('G')]
+        self.GOTO             = [ord('g')]
+        self.NEXT_PAGE        = [ord('j'), curses.KEY_DOWN, ord(' ')]
+        self.PREV_PAGE        = [ord('k'), curses.KEY_UP]
+        self.GO_BACK          = [ord('p')]
+        self.NEXT_CHAP        = [ord('l'), curses.KEY_RIGHT]
+        self.PREV_CHAP        = [ord('h'), curses.KEY_LEFT]
+        self.BUFFER_CYCLE     = [ord('b')]
+        self.BUFFER_CYCLE_REV = [ord('B')]
+        self.HINTS            = [ord('f')]
+        self.OPEN             = [curses.KEY_ENTER, curses.KEY_RIGHT, 10]
+        self.SHOW_TOC         = [ord('t')]
+        self.SHOW_META        = [ord('M')]
+        self.UPDATE_FROM_BIB  = [ord('b')]
+        self.SHOW_LINKS       = [ord('f')]
+        self.TOGGLE_TEXT_MODE = [ord('T')]
+        self.ROTATE_CW        = [ord('r')]
+        self.ROTATE_CCW       = [ord('R')]
+        self.VISUAL_MODE      = [ord('s')]
+        self.SELECT           = [ord('v')]
+        self.YANK             = [ord('y')]
+        self.INSERT_NOTE      = [ord('n')]
+        self.APPEND_NOTE      = [ord('a')]
+        self.TOGGLE_AUTOCROP  = [ord('c')]
+        self.TOGGLE_ALPHA     = [ord('A')]
+        self.TOGGLE_INVERT    = [ord('i')]
+        self.TOGGLE_TINT      = [ord('d')]
+        self.SET_PAGE_LABEL   = [ord('P')]
+        self.SET_PAGE_ALT     = [ord('I')]
+        self.INC_FONT         = [ord('=')]
+        self.DEC_FONT         = [ord('-')]
+        self.OPEN_GUI         = [ord('X')]
+        self.REFRESH          = [18, curses.KEY_RESIZE]            # CTRL-R
+        self.QUIT             = [3, ord('q')]
+        self.DEBUG            = [ord('D')]
 
 # Kitty graphics functions
 
@@ -1486,7 +1486,17 @@ def visual_mode(doc,bar):
             doc.mark_all_pages_stale()
             return
 
-def view(doc):
+def watch_for_file_change(file_change,path):
+    timestamp = os.path.getmtime(path)
+    while True:
+        sleep(.5)
+        nts = os.path.getmtime(path)
+        if nts != timestamp:
+            timestamp = nts
+            logging.debug('file changed')
+            file_change.set() 
+
+def view(file_change,doc):
 
     scr.get_size()
     scr.init_curses()
@@ -1504,7 +1514,6 @@ def view(doc):
     count_string = ""
     stack = [0]
     keys = shortcuts() 
-    timestamp = os.path.getmtime(doc.filename)
 
     while True:
 
@@ -1517,13 +1526,21 @@ def view(doc):
         else:
             count = int(count_string)
         
+        scr.stdscr.nodelay(True)
         key = scr.stdscr.getch()
-        ntimestamp = os.path.getmtime(doc.filename)
+        while key == -1 and not file_change.isSet():
+            key = scr.stdscr.getch()
+        scr.stdscr.nodelay(False)
+
+        if file_change.isSet():
+            logging.debug('view thread sees that file has changed')
+            key = keys.REFRESH[0]
+            file_change.clear()
 
         if key == -1:
             pass
 
-        elif key in keys.REFRESH or ntimestamp != timestamp:
+        elif key in keys.REFRESH: 
             scr.clear()
             scr.get_size()
             scr.init_curses()
@@ -1542,7 +1559,6 @@ def view(doc):
             doc.pages_to_logical_pages()
             doc.goto_logical_page(doc.logicalpage)
             doc.set_layout(doc.papersize,adjustpage=False)
-            timestamp = ntimestamp
 
         elif key == 27:
             # quash stray escape codes
@@ -1834,7 +1850,15 @@ def main(args=sys.argv):
     # apply layout settings
     doc.set_layout(doc.papersize,adjustpage=False)
 
-    view(doc) 
+    # set up thread to watch for file changes
+    import threading
+    file_change = threading.Event()
+    file_watch = threading.Thread(target=watch_for_file_change, args=(file_change, doc.filename))
+    file_watch.setDaemon(True)
+    file_watch.start()
+
+    doc_viewer = threading.Thread(target=view, args=(file_change, doc))
+    doc_viewer.start()
 
 if __name__ == '__main__':
     main()

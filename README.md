@@ -204,12 +204,6 @@ a citation from the PDF metadata:
 If you just want to send a citation to nvim, without selecting any text, you
 can use `n` or `a` in normal mode, too.
 
-## Autorefreshing Edited Files
-
-termpdf.py spends most of its time waiting for your keypress. After it receives
-a keypress, it quickly checks to see if the PDF file has been modified, and,
-if it has, it reloads the document.
-
 # Config file
 
 termpdf.py looks for a config file at `$HOME/.config/termpdf.py/config`. The
