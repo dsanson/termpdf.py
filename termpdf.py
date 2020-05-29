@@ -58,6 +58,7 @@ import os
 import sys
 import logging
 import termios
+import threading
 import subprocess
 import zlib
 import shutil
@@ -74,9 +75,6 @@ from collections import namedtuple
 from math import ceil
 from tempfile import NamedTemporaryFile
 
-# DEBUG logging
-logging.basicConfig(filename='termpdf.log',level=logging.DEBUG)
-#logging.basicConfig(filename='termpdf.log',level=logging.WARNING)
 
 # Class Definitions
 
@@ -1851,7 +1849,6 @@ def main(args=sys.argv):
     doc.set_layout(doc.papersize,adjustpage=False)
 
     # set up thread to watch for file changes
-    import threading
     file_change = threading.Event()
     file_watch = threading.Thread(target=watch_for_file_change, args=(file_change, doc.filename))
     file_watch.setDaemon(True)
@@ -1861,5 +1858,7 @@ def main(args=sys.argv):
     doc_viewer.start()
 
 if __name__ == '__main__':
+    #logging.basicConfig(filename='termpdf.log',level=logging.DEBUG)
+    logging.basicConfig(filename='termpdf.log',level=logging.WARNING)
     main()
 
