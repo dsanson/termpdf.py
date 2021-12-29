@@ -270,11 +270,11 @@ class Document(fitz.Document):
         self.filename = filename
         self.citekey = None
         self.papersize = 3
-        self.layout(rect=fitz.PaperRect('A6'),fontsize=fontsize)
+        self.layout(rect=fitz.paper_rect('A6'),fontsize=fontsize)
         self.page = 0
         self.logicalpage = 1
         self.prevpage = 0
-        self.pages = self.pageCount - 1
+        self.pages = self.page_count - 1
         self.first_page_offset = 1
         self.logical_pages = list(range(0 + self.first_page_offset, self.pages + self.first_page_offset))
         self.chapter = 0
@@ -336,7 +336,7 @@ class Document(fitz.Document):
         self.goto_page(self.page - count)
 
     def goto_chap(self, n):
-        toc = self.getToC()
+        toc = self.get_toc()
         if n > len(toc):
             n = len(toc)
         elif n < 0:
@@ -348,7 +348,7 @@ class Document(fitz.Document):
             self.goto_page(0)
 
     def current_chap(self):
-        toc = self.getToC()
+        toc = self.get_toc()
         p = self.page
         for i,ch in enumerate(toc):
            cp = ch[2] - 1
@@ -363,10 +363,10 @@ class Document(fitz.Document):
         self.goto_chap(self.chapter - count)
 
     def parse_pagelabels(self):
-        if self.isPDF:
+        if self.is_pdf:
             from pdfrw import PdfReader
             from pagelabels import PageLabels, PageLabelScheme
-            try: 
+            try:
                 reader = PdfReader(self.filename)
                 labels = PageLabels.from_pdf(reader)
                 labels = sorted(labels, key=attrgetter('startpage'))
@@ -377,7 +377,7 @@ class Document(fitz.Document):
         return labels
 
     def set_pagelabel(self,count,style="arabic"):
-        if self.isPDF:
+        if self.is_pdf:
             from pdfrw import PdfReader, PdfWriter
             from pagelabels import PageLabels, PageLabelScheme
             reader = PdfReader(self.filename)
@@ -484,7 +484,7 @@ class Document(fitz.Document):
         # until we find a match
         for i in [0,1,-1,2,-2,3,-3,4,-4,5,-5,6,-6]:
             f = target + i
-            match_text = self[f].getText().split()
+            match_text = self[f].get_text().split()
             match_text = ' '.join(match_text)
             if target_text in match_text:
                 return f
@@ -493,7 +493,7 @@ class Document(fitz.Document):
 
     def set_layout(self,papersize, adjustpage=True):
         # save a snippet of text from current page
-        target_text = self[self.page].getText().split()
+        target_text = self[self.page].get_text().split()
         if len(target_text) > 6:
             target_text = ' '.join(target_text[:6])
         elif len(target_text) > 0:
@@ -508,8 +508,8 @@ class Document(fitz.Document):
         elif papersize < 0:
             papersize = 0
         p = sizes[papersize]
-        self.layout(fitz.PaperRect(p))
-        self.pages = self.pageCount - 1
+        self.layout(fitz.paper_rect(p))
+        self.pages = self.page_count - 1
         if adjustpage:
             target = int((self.pages + 1) * pct) - 1
             target = self.find_target(target, target_text)
@@ -554,8 +554,8 @@ class Document(fitz.Document):
     def get_text_in_Rect(self, rect):
         from operator import itemgetter
         from itertools import groupby
-        page = self.loadPage(self.page)
-        words = page.getTextWords()
+        page = self.load_page(self.page)
+        words = page.get_text_words()
         mywords = [w for w in words if fitz.Rect(w[:4]) in rect]
         mywords.sort(key=itemgetter(3, 0))  # sort by y1, x0 of the word rect
         group = groupby(mywords, key=itemgetter(3))
@@ -568,8 +568,8 @@ class Document(fitz.Document):
     def get_text_intersecting_Rect(self, rect):
         from operator import itemgetter
         from itertools import groupby
-        page = self.loadPage(self.page)
-        words = page.getTextWords()
+        page = self.load_page(self.page)
+        words = page.get_text_words()
         mywords = [w for w in words if fitz.Rect(w[:4]).intersects(rect)]
         mywords.sort(key=itemgetter(3, 0))  # sort by y1, x0 of the word rect
         group = groupby(mywords, key=itemgetter(3))
@@ -580,14 +580,14 @@ class Document(fitz.Document):
 
     def search_text(self,string):
         for p in range(self.page,self.pages):
-            page_text = self.getPageText(p, 'text')
+            page_text = self.get_page_text(p, 'text')
             if re.search(string,page_text):
                 self.goto_page(p)
                 return "match on page"
         return "no matches"
 
     def auto_crop(self,page):
-        blocks = page.getTextBlocks()
+        blocks = page.get_text_blocks()
 
         if len(blocks) > 0:
             crop = fitz.Rect(blocks[0][:4])
@@ -601,21 +601,21 @@ class Document(fitz.Document):
         return crop
 
     def display_page(self, bar, p, display=True):
-        
-        page = self.loadPage(p)
+
+        page = self.load_page(p)
         page_state = self.page_states[p]
-        
-        if self.manualcrop and self.manualcroprect != [None,None] and self.isPDF:
-            page.setCropBox(fitz.Rect(self.manualcroprect[0],self.manualcroprect[1]))
 
-        elif self.autocrop and self.isPDF:
-            page.setCropBox(page.MediaBox)
+        if self.manualcrop and self.manualcroprect != [None,None] and self.is_pdf:
+            page.set_cropbox(fitz.Rect(self.manualcroprect[0],self.manualcroprect[1]))
+
+        elif self.autocrop and self.is_pdf:
+            page.set_cropbox(page.mediabox)
             crop = self.auto_crop(page)
-            page.setCropBox(crop)
+            page.set_cropbox(crop)
 
-        elif self.isPDF:
-            page.setCropBox(page.MediaBox)
-           
+        elif self.is_pdf:
+            page.set_cropbox(page.mediabox)
+
         dw = scr.width
         dh = scr.height - scr.cell_height
 
@@ -655,9 +655,9 @@ class Document(fitz.Document):
         if page_state.stale: #or (display and not write_gr_cmd_with_response(cmd)):
             # get zoomed and rotated pixmap
             mat = fitz.Matrix(factor, factor)
-            mat = mat.preRotate(self.rotation)
-            pix = page.getPixmap(matrix = mat, alpha=self.alpha)
-            
+            mat = mat.prerotate(self.rotation)
+            pix = page.get_pixmap(matrix = mat, alpha=self.alpha)
+
             if self.invert:
                 pix.invertIRect()
 
@@ -666,9 +666,9 @@ class Document(fitz.Document):
                 red = int(tint[0] * 256)
                 blue = int(tint[1] * 256)
                 green = int(tint[2] * 256)
-                # pix.tintWith(red, blue, green)
+                # pix.tint_with(red, blue, green)
                 # tinting disabled due to unresolved bug
-            
+
             # build cmd to send to kitty
             cmd = {'i': p + 1, 't': 'd', 's': pix.width, 'v': pix.height}
 
@@ -697,7 +697,7 @@ class Document(fitz.Document):
 
     def show_toc(self, bar):
 
-        toc = self.getToC()
+        toc = self.get_toc()
 
         if not toc:
             bar.message = "No ToC available"
@@ -786,8 +786,8 @@ class Document(fitz.Document):
        
         if 'Keywords' in bib_entry.fields:
             metadata['keywords'] = bib_entry.fields['Keywords']
-        
-        self.setMetadata(metadata)
+
+        self.set_metadata(metadata)
         try:
             self.saveIncr()
         except:
@@ -882,7 +882,7 @@ class Document(fitz.Document):
 
     def show_links(self, bar):
 
-        links = self[self.page].getLinks()
+        links = self[self.page].get_links()
 
         urls = [link for link in links if 0 < link['kind'] < 3]
 
@@ -1752,16 +1752,16 @@ def view(file_change,doc):
             stack = [0]
 
         elif key in keys.SET_PAGE_LABEL:
-            if doc.isPDF:
+            if doc.is_pdf:
                 doc.set_pagelabel(count,'arabic')
             else:
                 doc.first_page_offset = count - doc.page
             doc.pages_to_logical_pages()
             count_string = ""
             stack = [0]
- 
+
         elif key in keys.SET_PAGE_ALT:
-            if doc.isPDF:
+            if doc.is_pdf:
                 doc.set_pagelabel(count,'roman lowercase')
             else:
                 doc.first_page_offset = count - doc.page
