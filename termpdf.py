@@ -1526,11 +1526,11 @@ def view(file_change,doc):
         
         scr.stdscr.nodelay(True)
         key = scr.stdscr.getch()
-        while key == -1 and not file_change.isSet():
+        while key == -1 and not file_change.is_set():
             key = scr.stdscr.getch()
         scr.stdscr.nodelay(False)
 
-        if file_change.isSet():
+        if file_change.is_set():
             logging.debug('view thread sees that file has changed')
             key = keys.REFRESH[0]
             file_change.clear()
