@@ -108,7 +108,7 @@ class Config:
                     break
     
     def load_config_file(self):
-        config_file = os.path.join(os.getenv("XDG_CONFIG_HOME", "~/.config"), 'termpdf.py', 'config')
+        config_file = os.path.expanduser(os.path.join(os.getenv("XDG_CONFIG_HOME", "~/.config"), 'termpdf.py', 'config'))
         if os.path.exists(config_file):
             with open(config_file, 'r') as f:
                 prefs = json.load(f)
@@ -256,7 +256,7 @@ def get_filehash(path):
 
 def get_cachefile(path):
     filehash = get_filehash(path)
-    cachedir = os.path.join(os.getenv("XDG_CONFIG_HOME", "~/.config"), '.cache', 'termpdf.py')
+    cachedir = os.path.expanduser(os.path.join(os.getenv("XDG_CACHE_HOME", "~/.cache"), 'termpdf.py'))
     os.makedirs(cachedir, exist_ok=True)
     cachefile = os.path.join(cachedir, filehash)
     return cachefile
