@@ -1851,7 +1851,7 @@ def main(args=sys.argv):
     # set up thread to watch for file changes
     file_change = threading.Event()
     file_watch = threading.Thread(target=watch_for_file_change, args=(file_change, doc.filename))
-    file_watch.setDaemon(True)
+    file_watch.daemon = True
     file_watch.start()
 
     doc_viewer = threading.Thread(target=view, args=(file_change, doc))
