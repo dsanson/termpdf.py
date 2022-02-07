@@ -1,6 +1,6 @@
 # `termpdf.py`
 
-A graphical pdf (and epub and cbz) viewer, written in python, that works inside
+A graphical pdf and epub viewer, written in python, that works inside
 [kitty](https://sw.kovidgoyal.net/kitty/). 
 
 I wrote this to replace [termpdf](https://github.com/dsanson/termpdf), which
