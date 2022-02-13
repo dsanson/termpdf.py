@@ -659,7 +659,7 @@ class Document(fitz.Document):
             pix = page.get_pixmap(matrix = mat, alpha=self.alpha)
 
             if self.invert:
-                pix.invertIRect()
+                pix.invert_irect()
 
             if self.tint:
                 tint = fitz.utils.getColor(self.tint_color)
