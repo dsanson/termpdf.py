@@ -129,11 +129,7 @@ class Buffers:
         self.current = n
 
     def cycle(self, count):
-        l = len(self.docs) - 1
-        c = self.current + count 
-        if c > l:
-            c = 0
-        self.current = c
+        self.current = (self.current + count) % len(self.docs)
 
     def close_buffer(self,n):
         del self.docs[n]
