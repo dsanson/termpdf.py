@@ -22,8 +22,9 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   Kitty (unless other terminal emulators implement the same graphics protocol.)
 -   [PyMuPDF](https://pypi.org/project/PyMuPDF/)
     -   PyMuPDF in turn depends on MuPDF. On OSX, `brew install mupdf-tools`.
--   [bibtool](http://gerd-neugebauer.de/software/TeX/BibTool/en/) (optional) for faster
+-   [bibtool](http://gerd-neugebauer.de/software/TeX/BibTool/en/) for faster
 	bibtex parsing than pybtex.
+    - Install with `brew install bib-tool` on OSX.
 
 # Installation
 
