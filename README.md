@@ -28,21 +28,9 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 
 # Installation
 
-    git clone https://github.com/dsanson/termpdf.py
-    cd termpdf.py
-    pip install -r requirements.txt
+    python3 -m pip install git+https://github.com/dsanson/termpdf.py
 
-(You might need to use `pip3` if `pip` is Python 2 on your system.)
-
-Now you can run the script in place:
-
-    ./termpdf.py <file.pdf>
-
-Or copy it somewhere in your path.
-
-Or you can install it with pip:
-
-    pip install .
+This adds the `termpdf.py` command to your path.
 
 # Simple Usage
 
