@@ -29,12 +29,44 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 
 # Installation
 
-    git clone https://github.com/dsanson/termpdf.py
-    cd termpdf.py
-    poetry install  # recommended
-    pip install .
+## Via pip/pipx
 
-(You might need to use `pip3` if `pip` is Python 2 on your system.)
+The recommended way of installing independent python applications is `pipx`,
+to install termpdf you can run:
+
+```
+pipx install https://github.com/dsanson/termpdf.py
+```
+
+Alternatively if you do not want to use pipx, the package can be installed
+directly in your user site packages with `python3 -m pip install https://github.com/dsanson/termpdf.py`.
+
+Note that, as usual, this may upgrade/downgrade other packages leading to
+unexpected changes in your environment.
+
+## Directly
+
+The project is packaged via [Poetry](https://github.com/python-poetry/poetry),
+to install from the repository for development purposes:
+
+```
+git clone https://github.com/dsanson/termpdf.py
+cd termpdf.py
+poetry install
+```
+
+Alternatively it can be installed via pip as well, however `pip` does not
+yet support editable installs from `pyproject.toml` files, so Poetry is
+recommended.
+
+```
+git clone https://github.com/dsanson/termpdf.py
+cd termpdf.py
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install .
+```
+
 
 Now you can run the script in place:
 
