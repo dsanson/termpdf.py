@@ -25,18 +25,20 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [bibtool](http://gerd-neugebauer.de/software/TeX/BibTool/en/) for faster
 	bibtex parsing than pybtex.
     - Install with `brew install bib-tool` on OSX.
+-   pdflatex/texlive-core
 
 # Installation
 
     git clone https://github.com/dsanson/termpdf.py
     cd termpdf.py
-    pip install -r requirements.txt
+    poetry install  # recommended
+    pip install .
 
 (You might need to use `pip3` if `pip` is Python 2 on your system.)
 
 Now you can run the script in place:
 
-    ./termpdf.py <file.pdf>
+    termpdf <file.pdf>
 
 Or copy it somewhere in your path.
 

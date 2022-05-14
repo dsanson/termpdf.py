@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # vim:fileencoding=utf-8
 """\
 Usage:
@@ -15,7 +14,6 @@ Options:
     -h, --help
 """
 
-__version__ = "0.1.1"
 __license__ = "MIT"
 __copyright__ = "Copyright (c) 2019"
 __author__ = "David Sanson"
