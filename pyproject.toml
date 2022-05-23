@@ -5,7 +5,7 @@ description = "Graphical pdf reader that works inside the kitty terminal"
 authors = ["David Sanson"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.8"
 PyMuPDF = "^1.19.6"
 pdfrw = "^0.4"
 pyperclip = "^1.8.2"
