@@ -1,7 +1,7 @@
 # `termpdf.py`
 
 A graphical pdf and epub viewer, written in python, that works inside
-[kitty](https://sw.kovidgoyal.net/kitty/). 
+[kitty](https://sw.kovidgoyal.net/kitty/).
 
 I wrote this to replace [termpdf](https://github.com/dsanson/termpdf), which
 was a ridiculous hack of a bash script written around a bunch of command line
@@ -70,7 +70,6 @@ source .venv/bin/activate
 python3 -m pip install .
 ```
 
-
 Now you can run the script in place:
 
     termpdf <file.pdf>
@@ -118,7 +117,7 @@ navigation:
     [count]G:       go to page [count]
     q:              quit
 
-Note that these take counts, so `10j` moves forward 10 pages. 
+Note that these take counts, so `10j` moves forward 10 pages.
 
 As mentioned above, if you opened several documents at once, you can cycle through these documents by pressing `b`:
 
@@ -132,7 +131,7 @@ termpdf.py will use those labels to number pages. Note that this can cause
 trouble when using a command like `10G` to go to page 10, as it is quite
 possible to have two pages in a single document, both labeled "10".
 
-You can also add Page Labels from within termpdf.py. 
+You can also add Page Labels from within termpdf.py.
 
     [count]P:       Set page label of current page to count (as an arabic
                     numeral)
@@ -163,7 +162,7 @@ Some caveats:
 You can view the table of contents, metadata, or any links (internal or
 external) on the current page:
 
-    t:              table of contents 
+    t:              table of contents
     f:              show links on page
     M:              show metadata
 
@@ -201,7 +200,7 @@ funny: try hitting `ctrl-r` to see if that fixes the problem.
 
 If you want to select some text and send that to nvim, you
 need to enter "visual select mode":
-    
+
     s:              visual select mode
     v:              toggle between selecting and not.
     n:              insert selected text in nvim at current cursor location
@@ -256,9 +255,9 @@ config file is a json file. Here is mine:
 }
 ```
 
-TINT_COLOR can be set to any color in pymupdf's [color database](https://pymupdf.readthedocs.io/en/latest/colors/). 
+TINT_COLOR can be set to any color in pymupdf's [color database](https://pymupdf.readthedocs.io/en/latest/colors/).
 
-BIBTEX can be set to the path of a bibtex file with information about your documents. 
+BIBTEX can be set to the path of a bibtex file with information about your documents.
 
 NOTE_PATH can be set to the path of a default notes file. The default is `$HOME/inbox.org`.
 
@@ -275,7 +274,7 @@ You can also set "URL_BROWSER". If this is not set, termpdf.py will use `open` o
 
 If you use bibtex, you can associate a bibtex citekey with a document by using the `--citekey` cli option:
 
-	termpdf.py --citekey author2015 example.pdf 
+	termpdf.py --citekey author2015 example.pdf
 
 This information will be saved, so you don't need to specify the citekey every time you open the document. (Note that processing of cli options is dumb right now. If you try to open several documents and specify several citekeys, the last citeky specified will be applied to the first document, and the others will be ignored.)
 
@@ -330,7 +329,7 @@ function! OpenPDFCitekey()
    keepjumps normal! bbb
    let kcmd = kcmd . '--open ' . key . ' '
    if page
-       let kcmd = kcmd . '-p ' . page 
+       let kcmd = kcmd . '-p ' . page
    endif
    exe "!" . kcmd
 endfunction
@@ -348,7 +347,7 @@ the cache to save settings for each document you open. Documents will
 automatically open to the last viewed page, with the same cropping and
 rotation, etc.
 
-Sometimes, that's not what you want. 
+Sometimes, that's not what you want.
 
     termpdf.py --ignore-cache example.pdf
 
@@ -379,7 +378,7 @@ will open the document up "fresh", ignoring any saved settings.
 -   [ ] support command line arguments
     -   [x] --help
     -   [x] --version
-    -   [x] --page-number 
+    -   [x] --page-number
     -   [x] --first-page
 	-   [x] --citekey
 	-   [x] --open (by citekey)
@@ -393,7 +392,7 @@ will open the document up "fresh", ignoring any saved settings.
     -   [x] msgpack-rpc for interaction with nvim
         -   [x] send selected text to nvim buffer
         -   [x] send page number to buffer
-        -   [ ] configurable format for sent text 
+        -   [ ] configurable format for sent text
         -   [x] jump back from nvim to page in text
             (see the clunky vimscript function above)
     -   [ ] SyncTeX support
@@ -437,7 +436,7 @@ will open the document up "fresh", ignoring any saved settings.
     -   [x] manual cropping using visual select mode
     -   [ ] fit to width
     -   [ ] fit to height
-    -   [ ] arbitrary zooming 
+    -   [ ] arbitrary zooming
     -   [ ] panning
 -   [x] zoom in and out for reflowable documents
 
@@ -459,7 +458,7 @@ will open the document up "fresh", ignoring any saved settings.
 -   [ ] Fill out forms
     -   [ ] Document signing?
 
-## Visual Mode 
+## Visual Mode
 
 -   [ ] Keyboard visual mode
     -   [x] Select by rectangle
