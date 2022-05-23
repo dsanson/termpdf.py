@@ -31,18 +31,21 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 
 ## Via pip/pipx
 
-The recommended way of installing independent python applications is `pipx`,
-to install termpdf you can run:
+The recommended way of installing independent python applications is
+[`pipx`](https://github.com/pypa/pipx), to install termpdf you can run:
 
 ```
 pipx install https://github.com/dsanson/termpdf.py
 ```
 
-Alternatively if you do not want to use pipx, the package can be installed
-directly in your user site packages with `python3 -m pip install https://github.com/dsanson/termpdf.py`.
+Alternatively if you do not want to use `pipx`, the package can be installed
+directly in your user site packages with
+`python3 -m pip install https://github.com/dsanson/termpdf.py`.
 
 Note that, as usual, this may upgrade/downgrade other packages leading to
 unexpected changes in your environment.
+
+Both approaches will place a `termpdf` executable under `~/.local/bin`.
 
 ## Directly
 
@@ -55,9 +58,9 @@ cd termpdf.py
 poetry install
 ```
 
-Alternatively it can be installed via pip as well, however `pip` does not
-yet support editable installs from `pyproject.toml` files, so Poetry is
-recommended.
+Alternatively it can be installed via pip as well, if using `pip` version
+greater than [21.3](https://pip.pypa.io/en/stable/news/#v21-3) then editable
+installs are supported, otherwise only standard installs are possible.
 
 ```
 git clone https://github.com/dsanson/termpdf.py
