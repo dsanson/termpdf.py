@@ -84,22 +84,22 @@ Or you can install it with pip:
 
 This is evolving. Here is the simplest example:
 
-	termpdf.py example.pdf
+	termpdf example.pdf
 
 If you want to open to a specific page,
 
-	termpdf.py -p 10 example.pdf
+	termpdf -p 10 example.pdf
 
 If you want to specify the "logical page number" of the first page,
 
-	termpdf.py -f 132 example.pdf
+	termpdf -f 132 example.pdf
 
 (This is handy if you want to launch `termpdf.py` from a script, and your
 script knows that the PDF is a journal article that begins on page 236.)
 
 You can open several files at once:
 
-	termpdf.py example.pdf example2.pdf example3.pdf
+	termpdf example.pdf example2.pdf example3.pdf
 
 To cycle through several open files, press `b` (for "buffer").
 
@@ -274,17 +274,17 @@ You can also set "URL_BROWSER". If this is not set, termpdf.py will use `open` o
 
 If you use bibtex, you can associate a bibtex citekey with a document by using the `--citekey` cli option:
 
-	termpdf.py --citekey author2015 example.pdf
+	termpdf --citekey author2015 example.pdf
 
 This information will be saved, so you don't need to specify the citekey every time you open the document. (Note that processing of cli options is dumb right now. If you try to open several documents and specify several citekeys, the last citeky specified will be applied to the first document, and the others will be ignored.)
 
 If you have specified a bibtex file by setting BIBTEX in your config, and your bibtex includes a `File` field containing the path to your document, termpdf.py will attempt to discover the citekey automatically by matching the path, so you don't need to use the `--citekey` option. Likewise, if your bibtex includes a `File` field, you can open the document by specifying its key instead of its path:
 
-	termpdf.py --open author2015
+	termpdf --open author2015
 
 This works for several documents as well:
 
-	termpdf.py --open author2015 --open author2016
+	termpdf --open author2015 --open author2016
 
 Both of these features rely on pybtex, but it takes awhile for pybtex to parse
 a large bibtex database. So, if `bibtool` is installed, termpdf.py will use it to speed things up.
@@ -298,7 +298,7 @@ sent there as well.
 
 Alternatively, you can specify an nvim_listen_address on the command line:
 
-    termpdf.py --nvim-listen-address '/var/folders/tn/fjvms9ln3nvg8tztwcl31q1c0000gp/T/nvims23DfE/0'
+    termpdf --nvim-listen-address '/var/folders/tn/fjvms9ln3nvg8tztwcl31q1c0000gp/T/nvims23DfE/0'
 
 You can find the address for your current nvim session, either as the value of
 NVIM_LISTEN_ADDRESS, or as the value of `v:servername`:
@@ -317,7 +317,7 @@ using:
 ```
 function! OpenPDFCitekey()
    let kcmd = 'kitty --single-instance --instance-group=1 '
-   let kcmd = kcmd . 'termpdf.py --nvim-listen-address '
+   let kcmd = kcmd . 'termpdf --nvim-listen-address '
    let kcmd = kcmd . $NVIM_LISTEN_ADDRESS . ' '
    let key=expand('<cword>')
    keepjumps normal! ww
@@ -349,7 +349,7 @@ rotation, etc.
 
 Sometimes, that's not what you want.
 
-    termpdf.py --ignore-cache example.pdf
+    termpdf --ignore-cache example.pdf
 
 will open the document up "fresh", ignoring any saved settings.
 
