@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "termpdf"
+version = "0.1.0"
+description = "Graphical pdf reader that works inside the kitty terminal"
+authors = ["David Sanson"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+PyMuPDF = "^1.19.6"
+pdfrw = "^0.4"
+pyperclip = "^1.8.2"
+pybtex = "^0.24.0"
+pynvim = "^0.4.3"
+roman = "^3.3"
+pagelabels = "^1.2.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+
+[tool.poetry.scripts]
+termpdf = "termpdf.main:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

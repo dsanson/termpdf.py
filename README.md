@@ -1,7 +1,7 @@
 # `termpdf.py`
 
 A graphical pdf and epub viewer, written in python, that works inside
-[kitty](https://sw.kovidgoyal.net/kitty/). 
+[kitty](https://sw.kovidgoyal.net/kitty/).
 
 I wrote this to replace [termpdf](https://github.com/dsanson/termpdf), which
 was a ridiculous hack of a bash script written around a bunch of command line
@@ -25,18 +25,54 @@ Note the alpha transparency. You can toggle this on or off by pressing `a`.
 -   [bibtool](http://gerd-neugebauer.de/software/TeX/BibTool/en/) for faster
 	bibtex parsing than pybtex.
     - Install with `brew install bib-tool` on OSX.
+-   pdflatex/texlive-core
 
 # Installation
 
-    git clone https://github.com/dsanson/termpdf.py
-    cd termpdf.py
-    pip install -r requirements.txt
+## Via pip/pipx
 
-(You might need to use `pip3` if `pip` is Python 2 on your system.)
+The recommended way of installing independent python applications is
+[`pipx`](https://github.com/pypa/pipx), to install termpdf you can run:
+
+```
+pipx install https://github.com/dsanson/termpdf.py
+```
+
+Alternatively if you do not want to use `pipx`, the package can be installed
+directly in your user site packages with
+`python3 -m pip install https://github.com/dsanson/termpdf.py`.
+
+Note that, as usual, this may upgrade/downgrade other packages leading to
+unexpected changes in your environment.
+
+Both approaches will place a `termpdf` executable under `~/.local/bin`.
+
+## Directly
+
+The project is packaged via [Poetry](https://github.com/python-poetry/poetry),
+to install from the repository for development purposes:
+
+```
+git clone https://github.com/dsanson/termpdf.py
+cd termpdf.py
+poetry install
+```
+
+Alternatively it can be installed via pip as well, if using `pip` version
+greater than [21.3](https://pip.pypa.io/en/stable/news/#v21-3) then editable
+installs are supported, otherwise only standard installs are possible.
+
+```
+git clone https://github.com/dsanson/termpdf.py
+cd termpdf.py
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install .
+```
 
 Now you can run the script in place:
 
-    ./termpdf.py <file.pdf>
+    termpdf <file.pdf>
 
 Or copy it somewhere in your path.
 
@@ -48,22 +84,22 @@ Or you can install it with pip:
 
 This is evolving. Here is the simplest example:
 
-	termpdf.py example.pdf
+	termpdf example.pdf
 
 If you want to open to a specific page,
 
-	termpdf.py -p 10 example.pdf
+	termpdf -p 10 example.pdf
 
 If you want to specify the "logical page number" of the first page,
 
-	termpdf.py -f 132 example.pdf
+	termpdf -f 132 example.pdf
 
 (This is handy if you want to launch `termpdf.py` from a script, and your
 script knows that the PDF is a journal article that begins on page 236.)
 
 You can open several files at once:
 
-	termpdf.py example.pdf example2.pdf example3.pdf
+	termpdf example.pdf example2.pdf example3.pdf
 
 To cycle through several open files, press `b` (for "buffer").
 
@@ -81,7 +117,7 @@ navigation:
     [count]G:       go to page [count]
     q:              quit
 
-Note that these take counts, so `10j` moves forward 10 pages. 
+Note that these take counts, so `10j` moves forward 10 pages.
 
 As mentioned above, if you opened several documents at once, you can cycle through these documents by pressing `b`:
 
@@ -95,7 +131,7 @@ termpdf.py will use those labels to number pages. Note that this can cause
 trouble when using a command like `10G` to go to page 10, as it is quite
 possible to have two pages in a single document, both labeled "10".
 
-You can also add Page Labels from within termpdf.py. 
+You can also add Page Labels from within termpdf.py.
 
     [count]P:       Set page label of current page to count (as an arabic
                     numeral)
@@ -126,7 +162,7 @@ Some caveats:
 You can view the table of contents, metadata, or any links (internal or
 external) on the current page:
 
-    t:              table of contents 
+    t:              table of contents
     f:              show links on page
     M:              show metadata
 
@@ -164,7 +200,7 @@ funny: try hitting `ctrl-r` to see if that fixes the problem.
 
 If you want to select some text and send that to nvim, you
 need to enter "visual select mode":
-    
+
     s:              visual select mode
     v:              toggle between selecting and not.
     n:              insert selected text in nvim at current cursor location
@@ -219,9 +255,9 @@ config file is a json file. Here is mine:
 }
 ```
 
-TINT_COLOR can be set to any color in pymupdf's [color database](https://pymupdf.readthedocs.io/en/latest/colors/). 
+TINT_COLOR can be set to any color in pymupdf's [color database](https://pymupdf.readthedocs.io/en/latest/colors/).
 
-BIBTEX can be set to the path of a bibtex file with information about your documents. 
+BIBTEX can be set to the path of a bibtex file with information about your documents.
 
 NOTE_PATH can be set to the path of a default notes file. The default is `$HOME/inbox.org`.
 
@@ -238,17 +274,17 @@ You can also set "URL_BROWSER". If this is not set, termpdf.py will use `open` o
 
 If you use bibtex, you can associate a bibtex citekey with a document by using the `--citekey` cli option:
 
-	termpdf.py --citekey author2015 example.pdf 
+	termpdf --citekey author2015 example.pdf
 
 This information will be saved, so you don't need to specify the citekey every time you open the document. (Note that processing of cli options is dumb right now. If you try to open several documents and specify several citekeys, the last citeky specified will be applied to the first document, and the others will be ignored.)
 
 If you have specified a bibtex file by setting BIBTEX in your config, and your bibtex includes a `File` field containing the path to your document, termpdf.py will attempt to discover the citekey automatically by matching the path, so you don't need to use the `--citekey` option. Likewise, if your bibtex includes a `File` field, you can open the document by specifying its key instead of its path:
 
-	termpdf.py --open author2015
+	termpdf --open author2015
 
 This works for several documents as well:
 
-	termpdf.py --open author2015 --open author2016
+	termpdf --open author2015 --open author2016
 
 Both of these features rely on pybtex, but it takes awhile for pybtex to parse
 a large bibtex database. So, if `bibtool` is installed, termpdf.py will use it to speed things up.
@@ -262,7 +298,7 @@ sent there as well.
 
 Alternatively, you can specify an nvim_listen_address on the command line:
 
-    termpdf.py --nvim-listen-address '/var/folders/tn/fjvms9ln3nvg8tztwcl31q1c0000gp/T/nvims23DfE/0'
+    termpdf --nvim-listen-address '/var/folders/tn/fjvms9ln3nvg8tztwcl31q1c0000gp/T/nvims23DfE/0'
 
 You can find the address for your current nvim session, either as the value of
 NVIM_LISTEN_ADDRESS, or as the value of `v:servername`:
@@ -281,7 +317,7 @@ using:
 ```
 function! OpenPDFCitekey()
    let kcmd = 'kitty --single-instance --instance-group=1 '
-   let kcmd = kcmd . 'termpdf.py --nvim-listen-address '
+   let kcmd = kcmd . 'termpdf --nvim-listen-address '
    let kcmd = kcmd . $NVIM_LISTEN_ADDRESS . ' '
    let key=expand('<cword>')
    keepjumps normal! ww
@@ -293,7 +329,7 @@ function! OpenPDFCitekey()
    keepjumps normal! bbb
    let kcmd = kcmd . '--open ' . key . ' '
    if page
-       let kcmd = kcmd . '-p ' . page 
+       let kcmd = kcmd . '-p ' . page
    endif
    exe "!" . kcmd
 endfunction
@@ -311,9 +347,9 @@ the cache to save settings for each document you open. Documents will
 automatically open to the last viewed page, with the same cropping and
 rotation, etc.
 
-Sometimes, that's not what you want. 
+Sometimes, that's not what you want.
 
-    termpdf.py --ignore-cache example.pdf
+    termpdf --ignore-cache example.pdf
 
 will open the document up "fresh", ignoring any saved settings.
 
@@ -342,7 +378,7 @@ will open the document up "fresh", ignoring any saved settings.
 -   [ ] support command line arguments
     -   [x] --help
     -   [x] --version
-    -   [x] --page-number 
+    -   [x] --page-number
     -   [x] --first-page
 	-   [x] --citekey
 	-   [x] --open (by citekey)
@@ -356,7 +392,7 @@ will open the document up "fresh", ignoring any saved settings.
     -   [x] msgpack-rpc for interaction with nvim
         -   [x] send selected text to nvim buffer
         -   [x] send page number to buffer
-        -   [ ] configurable format for sent text 
+        -   [ ] configurable format for sent text
         -   [x] jump back from nvim to page in text
             (see the clunky vimscript function above)
     -   [ ] SyncTeX support
@@ -400,7 +436,7 @@ will open the document up "fresh", ignoring any saved settings.
     -   [x] manual cropping using visual select mode
     -   [ ] fit to width
     -   [ ] fit to height
-    -   [ ] arbitrary zooming 
+    -   [ ] arbitrary zooming
     -   [ ] panning
 -   [x] zoom in and out for reflowable documents
 
@@ -422,7 +458,7 @@ will open the document up "fresh", ignoring any saved settings.
 -   [ ] Fill out forms
     -   [ ] Document signing?
 
-## Visual Mode 
+## Visual Mode
 
 -   [ ] Keyboard visual mode
     -   [x] Select by rectangle
