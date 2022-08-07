@@ -1057,7 +1057,7 @@ class shortcuts:
         self.TOGGLE_TINT      = [ord('d')]
         self.SET_PAGE_LABEL   = [ord('P')]
         self.SET_PAGE_ALT     = [ord('I')]
-        self.INC_FONT         = [ord('=')]
+        self.INC_FONT         = [ord('+')]
         self.DEC_FONT         = [ord('-')]
         self.OPEN_GUI         = [ord('X')]
         self.REFRESH          = [18, curses.KEY_RESIZE]            # CTRL-R
