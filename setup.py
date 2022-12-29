@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from distutils.core import setup
+from setuptools import setup
 
 setup(name='termpdf.py',
       version='0.1.0',
@@ -9,7 +9,7 @@ setup(name='termpdf.py',
       author_email='dsanson@gmail.com',
       url='https://github.com/dsanson/termpdf.py',
       scripts=['termpdf.py'],
-      requires=[
+      install_requires=[
           'PyMuPDF', 
           'pyperclip', 
           'pdfrw', 
