@@ -681,7 +681,7 @@ class Document(fitz.Document):
             self.clear_page(self.prevpage)
             # display the image
             cmd = {'a': 'p', 'i': p + 1, 'z': -1}
-            success = write_gr_cmd_with_response(cmd)
+            success = write_gr_cmd(cmd)
             if not success:
                 self.page_states[p].stale = True
                 bar.message = 'failed to load page ' + str(p+1)
